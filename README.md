@@ -2,6 +2,13 @@
 
 `redisq` is a Python library for distributed job queuing and processing using Redis Streams. It supports consumer groups, partition rebalancing, reconsumption, heartbeats, crash detection, and efficient batch job production.
 
+## Installation
+Install `redisq` from PyPI:
+
+```bash
+pip install redisq
+```
+
 ## Features
 - **Producer**:
   - Enqueue individual jobs with `enqueue(payload)` or batches with `batch_enqueue(payloads)` to a specified topic.
@@ -20,15 +27,6 @@
 - **Redis-Compatible**: Uses Redis Streams for persistence and coordination.
 
 **Warning**: Unbounded streams (`maxlen=None`) can consume significant Redis memory. Set `maxlen` (e.g., 1000) to limit stream size in production.
-
-## Installation
-```bash
-poetry install
-```
-
-## Examples
-- **Basic Example**: Demonstrates batch job production, consumption, rebalancing, and reconsumption. See [examples/basic/README.md](examples/basic/README.md).
-- **FastAPI Integration**: Shows how to integrate `redisq` with a FastAPI application for job submission and monitoring. See [examples/fastapi/README.md](examples/fastapi/README.md).
 
 ## Usage
 ```python
@@ -58,6 +56,10 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Examples
+- **Basic Example**: Demonstrates batch job production, consumption, rebalancing, and reconsumption. See [examples/basic/README.md](examples/basic/README.md).
+- **FastAPI Integration**: Shows how to integrate `redisq` with a FastAPI application for job submission and processing. See [examples/fastapi/README.md](examples/fastapi/README.md).
 
 ## Running Tests
 ```bash

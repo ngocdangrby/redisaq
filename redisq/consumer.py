@@ -1,8 +1,10 @@
 import asyncio
 import json
 import logging
-from typing import Callable, List, Optional, Awaitable
+from typing import Callable, List, Optional, Awaitable, cast
 import aioredis
+from aioredis import Redis
+
 from redisq.models import Job
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +30,7 @@ class Consumer:
         self.prefix = prefix
         self.heartbeat_ttl = heartbeat_ttl
         self.heartbeat_interval = heartbeat_interval
-        self.redis = None
+        self.redis: Optional[Redis] = None
         self.running = False
         self.partitions: List[int] = []
         self.paused = False
@@ -109,7 +111,7 @@ class Consumer:
     async def get_num_partitions(self) -> int:
         await self.connect()
         try:
-            num_partitions = await self.redis.get(f"{self.prefix}:partitions:{self.topic}")
+            num_partitions = await cast(Redis, self.redis).get(f"{self.prefix}:partitions:{self.topic}")
             if num_partitions is None:
                 return 1
             return int(num_partitions)
@@ -170,7 +172,7 @@ class Consumer:
     async def get_worker_count(self) -> int:
         await self.connect()
         try:
-            workers = await self.redis.keys(f"{self.prefix}:worker:{self.topic}:{self.group}:*")
+            workers = await cast(Redis, self.redis).keys(f"{self.prefix}:worker:{self.topic}:{self.group}:*")
             return len(workers)
         except Exception as e:
             logger.error(f"Error getting worker count: {e}", exc_info=e)

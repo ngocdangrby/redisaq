@@ -1,9 +1,11 @@
 import asyncio
 import json
 import uuid
-from typing import Any, Optional, List
+from typing import Any, Optional, List, cast
 import aioredis
 import logging
+
+from aioredis import Redis
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +24,7 @@ class Producer:
         self.prefix = prefix
         self.maxlen = maxlen
         self.approximate = approximate
-        self.redis = None
+        self.redis: Optional[Redis] = None
 
     async def connect(self):
         if self.redis is None:
@@ -43,11 +45,11 @@ class Producer:
         await self.connect()
         try:
             job_id = str(uuid.uuid4())
-            partition = await self.redis.incr(f"{self.prefix}:stats:{self.topic}:jobs") % await self.get_num_partitions()
+            partition = await cast(Redis, self.redis).incr(f"{self.prefix}:stats:{self.topic}:jobs") % await self.get_num_partitions()
             stream = f"{self.prefix}:{self.topic}:{partition}"
             final_maxlen = maxlen if maxlen is not None else self.maxlen
             final_approximate = approximate if approximate is not None else self.approximate
-            await self.redis.xadd(
+            await cast(Redis, self.redis).xadd(
                 stream,
                 {
                     "id": job_id,
@@ -75,10 +77,10 @@ class Producer:
             job_ids = []
             final_maxlen = maxlen if maxlen is not None else self.maxlen
             final_approximate = approximate if approximate is not None else self.approximate
-            async with self.redis.pipeline() as pipe:
+            async with cast(Redis, self.redis).pipeline() as pipe:
                 for payload in payloads:
                     job_id = str(uuid.uuid4())
-                    partition = await self.redis.incr(f"{self.prefix}:stats:{self.topic}:jobs") % await self.get_num_partitions()
+                    partition = await cast(Redis, self.redis).incr(f"{self.prefix}:stats:{self.topic}:jobs") % await self.get_num_partitions()
                     stream = f"{self.prefix}:{self.topic}:{partition}"
                     pipe.xadd(
                         stream,
@@ -103,9 +105,9 @@ class Producer:
     async def get_num_partitions(self) -> int:
         await self.connect()
         try:
-            num_partitions = await self.redis.get(f"{self.prefix}:partitions:{self.topic}")
+            num_partitions = await cast(Redis, self.redis).get(f"{self.prefix}:partitions:{self.topic}")
             if num_partitions is None:
-                await self.redis.set(f"{self.prefix}:partitions:{self.topic}", 1)
+                await cast(Redis, self.redis).set(f"{self.prefix}:partitions:{self.topic}", 1)
                 return 1
             return int(num_partitions)
         except Exception as e:
@@ -117,7 +119,7 @@ class Producer:
         try:
             current = await self.get_num_partitions()
             if num_partitions > current:
-                await self.redis.set(f"{self.prefix}:partitions:{self.topic}", num_partitions)
+                await cast(Redis, self.redis).set(f"{self.prefix}:partitions:{self.topic}", num_partitions)
                 logger.info(f"Set partitions for {self.topic} to {num_partitions}")
         except Exception as e:
             logger.error(f"Error increasing partitions: {e}", exc_info=e)

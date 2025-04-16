@@ -1,3 +1,37 @@
+[project]
+name = "redisq"
+version = "0.1.0"
+description = "A Python library for distributed job queuing and processing using Redis Streams"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Do Quoc Vuong", email = "vuongtlt13@gmail.com" }
+]
+dependencies = [
+    "aioredis>=2.0.0",
+    "pydantic>=2.0.0"
+]
+keywords = ["redis", "queue", "job", "async", "streams"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/vuongtlt13/redisq"
+Documentation = "https://github.com/vuongtlt13/redisq#readme"
+Repository = "https://github.com/vuongtlt13/redisq"
+Issues = "https://github.com/vuongtlt13/redisq/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["redisq"]
+
 [tool.poetry]
 name = "redisq"
 version = "0.1.0"
@@ -20,7 +54,10 @@ pytest-asyncio = "^0.21"
 fastapi = "^0.100"
 uvicorn = "^0.23"
 sphinx = "^7.0"
+mypy = ">=1.5,<2.0"
+hatch = "^1.14.1"
+twine = "^6.1.0"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0", "hatchling"]
+build-backend = "hatchling.build"

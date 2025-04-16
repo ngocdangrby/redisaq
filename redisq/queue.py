@@ -2,8 +2,10 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import List, Optional
+from typing import List, Optional, cast
 import aioredis
+from aioredis import Redis
+
 from .models import Job
 
 logging.basicConfig(level=logging.INFO)
@@ -13,7 +15,7 @@ class Queue:
     def __init__(self, redis_url: str = "redis://localhost:6379", prefix: str = "jobs"):
         self.redis_url = redis_url
         self.prefix = prefix
-        self.redis = None
+        self.redis: Optional[Redis] = None
         self.dead_letter_stream = f"{self.prefix}:dead_letter"
 
     async def connect(self):
@@ -28,12 +30,12 @@ class Queue:
 
     async def get_num_partitions(self, topic: str) -> int:
         await self.connect()
-        num_partitions = await self.redis.get(f"{self.prefix}:partitions:{topic}")
+        num_partitions = await cast(Redis, self.redis).get(f"{self.prefix}:partitions:{topic}")
         return int(num_partitions) if num_partitions else 0
 
     async def set_num_partitions(self, topic: str, num_partitions: int):
         await self.connect()
-        await self.redis.set(f"{self.prefix}:partitions:{topic}", num_partitions)
+        await cast(Redis, self.redis).set(f"{self.prefix}:partitions:{topic}", num_partitions)
         logger.debug(f"Set {topic} partitions to {num_partitions}")
 
     async def enqueue(self, topic: str, job: Job) -> str:
@@ -47,7 +49,7 @@ class Queue:
         partition = hash(job.id) % num_partitions
         stream = f"{self.prefix}:{topic}:{partition}"
         try:
-            message_id = await self.redis.xadd(stream, job.to_dict())
+            message_id = await cast(Redis, self.redis).xadd(stream, job.to_dict())
             logger.debug(f"Enqueued job {job.id} to {stream}")
             return job.id
         except Exception as e:
@@ -67,7 +69,7 @@ class Queue:
             partition = hash(job.id) % num_partitions
             stream = f"{self.prefix}:{topic}:{partition}"
             try:
-                message_id = await self.redis.xadd(stream, job.to_dict())
+                message_id = await cast(Redis, self.redis).xadd(stream, job.to_dict())
                 job_ids.append(job.id)
                 logger.debug(f"Enqueued job {job.id} to {stream}")
             except Exception as e:
