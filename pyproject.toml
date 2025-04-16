@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "redisq"
+version = "0.1.0"
+description = "A lightweight, async Redis-based queue for small applications, alternative to Kafka."
+authors = ["Do Quoc Vuong <vuongtlt13@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/vuongtlt13/redisq"
+repository = "https://github.com/vuongtlt13/redisq"
+documentation = "https://redisq.readthedocs.io"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<4.0"
+aioredis = "^2.0.0"
+prometheus-client = "^0.20.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0"
+pytest-asyncio = "^0.21"
+fastapi = "^0.100"
+uvicorn = "^0.23"
+sphinx = "^7.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

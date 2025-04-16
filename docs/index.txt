@@ -1,0 +1,18 @@
+Welcome to Redisq's documentation!
+=================================
+
+Redisq is a lightweight, async Redis-based queue for small applications, designed as an alternative to Kafka.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   redisq
+
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
