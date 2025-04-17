@@ -1,9 +1,21 @@
-# FastAPI Integration Example for redisq
+# FastAPI Integration Example for redisaq
 
-This example demonstrates how to integrate `redisq` with a FastAPI application to enqueue and process jobs asynchronously using Redis Streams, with the consumer running in a separate process.
+This example demonstrates how to integrate `redisaq` with a FastAPI application to enqueue and process jobs asynchronously using Redis Streams, with the consumer running in a separate process.
+
+## Installation
+Install `redisaq` from PyPI:
+
+```bash
+pip install redisaq
+```
+
+Install FastAPI and Uvicorn:
+
+```bash
+pip install fastapi uvicorn
+```
 
 ## Overview
-
 The example simulates an email-sending API:
 - **`main.py`**: A FastAPI app with:
   - **POST /jobs**: Enqueues a batch of email jobs to the `send_email` topic, with payloads like `{"to": "user1@example.com", "subject": "..."}`.
@@ -17,25 +29,19 @@ The example simulates an email-sending API:
 - **Consumer Status**: Monitor Redis connectivity via API; consumer status checked via logs or Redis.
 - **Stream Limiting**: Streams are capped at ~1000 messages to manage Redis memory.
 - **Consumer Groups**: Supports reconsumption by creating a new group (not shown in this example).
-- **Heartbeats**: Consumer maintains a heartbeat (`redisq:worker:send_email:email_group:api_consumer`, TTL 10s, updated every 5s).
-- **Dead-Letter Queue**: Failed jobs go to `redisq:dead_letter`.
+- **Heartbeats**: Consumer maintains a heartbeat (`redisaq:worker:send_email:email_group:api_consumer`, TTL 10s, updated every 5s).
+- **Dead-Letter Queue**: Failed jobs go to `redisaq:dead_letter`.
 - **Async Processing**: Consumer `process_job` function is asynchronous, allowing non-blocking job handling.
 
 **Warning**: Setting `maxlen=None` (unbounded streams) can lead to significant memory usage in Redis. This example uses `maxlen=1000`, but be cautious in production.
 
 ## Prerequisites
 - Python 3.8+
-- [Poetry](https://python-poetry.org/) for dependency management
 - Redis running at `redis://localhost:6379`
 - Docker (optional, for running Redis via `docker-compose`)
 
 ## Setup
-1. **Install Dependencies**:
-   ```bash
-   poetry install
-   ```
-
-2. **Start Redis**:
+1. **Start Redis**:
    Use Docker:
    ```bash
    docker-compose up -d
@@ -48,18 +54,18 @@ The example simulates an email-sending API:
 ## Running the Example
 1. **Start Consumer** (in one terminal):
    ```bash
-   poetry run python consumer.py
+   python consumer.py
    ```
 
 2. **Start FastAPI App** (in another terminal):
    ```bash
-   poetry run uvicorn main:app --host 0.0.0.0 --port 8000
+   uvicorn main:app --host 0.0.0.0 --port 8000
    ```
 
 3. **Test Endpoints**:
    - Enqueue jobs:
      ```bash
-     curl -X POST http://localhost:8000/jobs -H "Content-Type: application/json" -d '{"jobs": [{"to": "user1@example.com", "subject": "Test", "body": "Hello"}, {"to": "user2@example.com", "subject": "Test2", "body": "Hi"}]}'
+     curl -X POST http://localhost:8000/jobs -H "Content-Type: application/json" -d '{"messages": [{"to": "user1@example.com", "subject": "Test", "body": "Hello"}, {"to": "user2@example.com", "subject": "Test2", "body": "Hi"}]}'
      ```
      Response: `{"job_ids": ["<uuid1>", "<uuid2>"]}`
    - Check status:
@@ -78,10 +84,10 @@ The example simulates an email-sending API:
 ## Expected Logs
 - **Consumer**:
   ```
-  INFO:redisq:Consumer api_consumer registered for topic send_email, group email_group
-  INFO:redisq:Consumer api_consumer assigned partitions [0]
-  INFO:redisq:API consumer processing job <uuid1> with payload {'to': 'user1@example.com', ...}
-  INFO:redisq:API consumer completed job <uuid1>
+  INFO:redisaq:Consumer api_consumer registered for topic send_email, group email_group
+  INFO:redisaq:Consumer api_consumer assigned partitions [0]
+  INFO:redisaq:API consumer processing job <uuid1> with payload {'to': 'user1@example.com', ...}
+  INFO:redisaq:API consumer completed job <uuid1>
   ```
 - **FastAPI App**:
   ```
@@ -92,26 +98,26 @@ The example simulates an email-sending API:
 Use Redis CLI to inspect:
 - **Check Stream**:
   ```bash
-  XLEN redisq:send_email:0
+  XLEN redisaq:send_email:0
   ```
   Output: ~1000 messages max.
 - **View Jobs**:
   ```bash
-  XRANGE redisq:send_email:0 - +
+  XRANGE redisaq:send_email:0 - +
   ```
 - **Check Consumer Group**:
   ```bash
-  XINFO GROUPS redisq:send_email:0
+  XINFO GROUPS redisaq:send_email:0
   ```
   Output: Shows `email_group`.
 - **Check Consumers**:
   ```bash
-  XINFO CONSUMERS redisq:send_email:0 email_group
+  XINFO CONSUMERS redisaq:send_email:0 email_group
   ```
   Output: Lists `api_consumer`.
 - **Check Dead-Letter**:
   ```bash
-  XRANGE redisq:dead_letter - +
+  XRANGE redisaq:dead_letter - +
   ```
 
 ## Notes
@@ -120,7 +126,7 @@ Use Redis CLI to inspect:
 - **Unbounded Streams**: Modify `main.py` to use `maxlen=None`, but monitor memory (`INFO MEMORY`).
 - **Monitoring**: Check consumer status via Redis:
   ```bash
-  KEYS redisq:worker:send_email:email_group:*
+  KEYS redisaq:worker:send_email:email_group:*
   ```
 
-This example shows how `redisq` integrates with Fast
+This example shows how `redisaq` integrates with FastAPI for job queuing and processing in separate processes.

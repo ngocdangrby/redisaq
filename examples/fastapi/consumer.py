@@ -1,14 +1,14 @@
 """
-FastAPI Integration Example for redisq: Job Consumer
+FastAPI Integration Example for redisaq: Job Consumer
 
 This script runs a consumer for the 'send_email' topic in group 'email_group',
-processing jobs enqueued by the FastAPI app (main.py). It runs in a separate process
+processing messages enqueued by the FastAPI app (main.py). It runs in a separate process
 from the FastAPI app.
 
 Prerequisites:
-- Python 3.8+ and dependencies installed (`poetry install`).
+- Python 3.8+ and dependencies installed (`pip install redisaq`).
 - Redis running at redis://localhost:6379.
-- FastAPI app enqueuing jobs (main.py).
+- FastAPI app enqueuing messages (main.py).
 
 How to Run:
 1. Start Redis:
@@ -17,15 +17,15 @@ How to Run:
    ```
 2. Run Consumer:
    ```bash
-   poetry run python consumer.py
+   python consumer.py
    ```
 3. Run FastAPI App (in another terminal):
    ```bash
-   poetry run uvicorn main:app --host 0.0.0.0 --port 8000
+   uvicorn main:app --host 0.0.0.0 --port 8000
    ```
 4. Enqueue Jobs:
    ```bash
-   curl -X POST http://localhost:8000/jobs -H "Content-Type: application/json" -d '{"jobs": [{"to": "user1@example.com", "subject": "Test", "body": "Hello"}]}'
+   curl -X POST http://localhost:8000/jobs -H "Content-Type: application/json" -d '{"messages": [{"to": "user1@example.com", "subject": "Test", "body": "Hello"}]}'
    ```
 5. Stop with Ctrl+C, then:
    ```bash
@@ -35,21 +35,21 @@ How to Run:
 Expected Behavior:
 - Registers with 'send_email' topic, group 'email_group'.
 - Uses heartbeats (TTL 10s, interval 5s) for coordination.
-- Processes jobs asynchronously, acknowledges with xack.
+- Processes messages asynchronously, acknowledges with xack.
 - Supports reconsumption with a new group.
 """
 
 import asyncio
 import logging
-from redisq import Consumer
+from redisaq import Consumer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def process_job(job):
-    logger.info(f"API consumer processing job {job.id} with payload {job.payload}")
+    logger.info(f"API consumer processing message {job.id} with payload {job.payload}")
     await asyncio.sleep(1)  # Simulate processing
-    logger.info(f"API consumer completed job {job.id}")
+    logger.info(f"API consumer completed message {job.id}")
 
 async def main():
     consumer = Consumer(

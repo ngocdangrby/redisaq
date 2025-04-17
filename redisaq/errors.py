@@ -1,0 +1,2 @@
+class PartitionKeyError(ValueError):
+    pass

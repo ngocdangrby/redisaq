@@ -1,15 +1,15 @@
 """
-FastAPI Integration Example for redisq: Job Enqueue
+FastAPI Integration Example for redisaq: Job Enqueue
 
-This script runs a FastAPI application that enqueues email jobs to the 'send_email' topic.
-The consumer is run separately in 'consumer.py' to process jobs in a different process.
+This script runs a FastAPI application that enqueues email messages to the 'send_email' topic.
+The consumer is run separately in 'consumer.py' to process messages in a different process.
 
 Endpoints:
-- POST /jobs: Enqueue a batch of email jobs.
+- POST /messages: Enqueue a batch of email messages.
 - GET /status: Check Redis connection status.
 
 Prerequisites:
-- Python 3.8+ and dependencies installed (`poetry install`).
+- Python 3.8+ and dependencies installed (`pip install redisaq fastapi uvicorn`).
 - Redis running at redis://localhost:6379.
 
 How to Run:
@@ -19,15 +19,15 @@ How to Run:
    ```
 2. Run Consumer (in one terminal):
    ```bash
-   poetry run python consumer.py
+   python consumer.py
    ```
 3. Run FastAPI App (in another terminal):
    ```bash
-   poetry run uvicorn main:app --host 0.0.0.0 --port 8000
+   uvicorn main:app --host 0.0.0.0 --port 8000
    ```
 4. Test Endpoints:
    ```bash
-   curl -X POST http://localhost:8000/jobs -H "Content-Type: application/json" -d '{"jobs": [{"to": "user1@example.com", "subject": "Test", "body": "Hello"}]}'
+   curl -X POST http://localhost:8000/jobs -H "Content-Type: application/json" -d '{"messages": [{"to": "user1@example.com", "subject": "Test", "body": "Hello"}]}'
    curl http://localhost:8000/status
    ```
 5. Stop with Ctrl+C, then:
@@ -36,17 +36,16 @@ How to Run:
    ```
 
 Expected Behavior:
-- Enqueues jobs to 'send_email' topic via /jobs endpoint.
+- Enqueues messages to 'send_email' topic via /messages endpoint.
 - /status endpoint confirms Redis connectivity.
 - Limits streams to maxlen=1000 using xadd.
 """
 
-import asyncio
 import logging
 from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel
-from redisq import Producer
+from redisaq import Producer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -1,5 +1,5 @@
 [project]
-name = "redisq"
+name = "redisaq"
 version = "0.1.0"
 description = "A Python library for distributed job queuing and processing using Redis Streams"
 readme = "README.md"
@@ -12,7 +12,7 @@ dependencies = [
     "aioredis>=2.0.0",
     "pydantic>=2.0.0"
 ]
-keywords = ["redis", "queue", "job", "async", "streams"]
+keywords = ["redis", "queue", "job", "async", "streams", "redisaq"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -24,29 +24,30 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/vuongtlt13/redisq"
-Documentation = "https://github.com/vuongtlt13/redisq#readme"
-Repository = "https://github.com/vuongtlt13/redisq"
-Issues = "https://github.com/vuongtlt13/redisq/issues"
+Homepage = "https://github.com/vuongtlt13/redisaq"
+Documentation = "https://github.com/vuongtlt13/redisaq#readme"
+Repository = "https://github.com/vuongtlt13/redisaq"
+Issues = "https://github.com/vuongtlt13/redisaq/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["redisq"]
+packages = ["redisaq"]
 
 [tool.poetry]
-name = "redisq"
+name = "redisaq"
 version = "0.1.0"
 description = "A lightweight, async Redis-based queue for small applications, alternative to Kafka."
 authors = ["Do Quoc Vuong <vuongtlt13@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/vuongtlt13/redisq"
-repository = "https://github.com/vuongtlt13/redisq"
-documentation = "https://redisq.readthedocs.io"
+homepage = "https://github.com/vuongtlt13/redisaq"
+repository = "https://github.com/vuongtlt13/redisaq"
+documentation = "https://redisaq.readthedocs.io"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
 aioredis = "^2.0.0"
 prometheus-client = "^0.20.0"
+orjson = "^3.10.15"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
@@ -57,6 +58,12 @@ sphinx = "^7.0"
 mypy = ">=1.5,<2.0"
 hatch = "^1.14.1"
 twine = "^6.1.0"
+ruff = "^0.11.5"
+fakeredis = "^2.28.1"
+pytest-cov = "^4.1.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "hatchling"]

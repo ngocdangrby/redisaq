@@ -1,12 +1,12 @@
-# redisq
+# redisaq
 
-`redisq` is a Python library for distributed job queuing and processing using Redis Streams. It supports consumer groups, partition rebalancing, reconsumption, heartbeats, crash detection, and efficient batch job production.
+`redisaq` is a Python library for distributed job queuing and processing using Redis Streams. It supports consumer groups, partition rebalancing, reconsumption, heartbeats, crash detection, and efficient batch job production.
 
 ## Installation
-Install `redisq` from PyPI:
+Install `redisaq` from PyPI:
 
 ```bash
-pip install redisq
+pip install redisaq
 ```
 
 ## Features
@@ -14,13 +14,13 @@ pip install redisq
   - Enqueue individual jobs with `enqueue(payload)` or batches with `batch_enqueue(payloads)` to a specified topic.
   - Configurable stream length (`maxlen`) and trimming behavior (`approximate`) via `XADD`.
   - Dynamic partition scaling for load distribution.
-  - Uses `redisq` prefix by default for streams and keys (e.g., `redisq:send_email:0`).
+  - Uses `redisaq` prefix by default for streams and keys (e.g., `redisaq:send_email:0`).
 - **Consumer**:
   - Process jobs in consumer groups using `XREADGROUP` and `XACK`.
   - Self-assign partitions with round-robin strategy.
   - Pause/rebalance/resume on consumer join or crash.
   - Heartbeats (TTL 10s, interval 5s) for crash detection.
-  - Dead-letter queue for failed jobs (`redisq:dead_letter`).
+  - Dead-letter queue for failed jobs (`redisaq:dead_letter`).
   - Asynchronous `process_job` function for non-blocking job handling.
 - **Reconsumption**: Create a new consumer group to reprocess all jobs in streams.
 - **Async**: Built with `asyncio` for non-blocking I/O.
@@ -30,7 +30,7 @@ pip install redisq
 
 ## Usage
 ```python
-from redisq import Producer, Consumer
+from redisaq import Producer, Consumer
 import asyncio
 
 async def main():
@@ -43,7 +43,7 @@ async def main():
 
     # Consumer
     async def process_job(job):
-        print(f"Processing job {job.id}: {job.payload}")
+        print(f"Processing message {job.id}: {job.payload}")
         await asyncio.sleep(1)
 
     consumer = Consumer(
@@ -59,7 +59,7 @@ asyncio.run(main())
 
 ## Examples
 - **Basic Example**: Demonstrates batch job production, consumption, rebalancing, and reconsumption. See [examples/basic/README.md](examples/basic/README.md).
-- **FastAPI Integration**: Shows how to integrate `redisq` with a FastAPI application for job submission and processing. See [examples/fastapi/README.md](examples/fastapi/README.md).
+- **FastAPI Integration**: Shows how to integrate `redisaq` with a FastAPI application for job submission and processing. See [examples/fastapi/README.md](examples/fastapi/README.md).
 
 ## Running Tests
 ```bash

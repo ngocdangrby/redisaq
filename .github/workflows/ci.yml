@@ -1,0 +1,102 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'  # Adjust based on pyproject.toml
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pypoetry/virtualenvs
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-root
+
+      - name: Run unit tests with coverage
+        run: |
+          poetry run pytest test_producer.py --asyncio-mode=auto --cov=redisaq --cov-report=xml:unit_coverage.xml
+
+      - name: Upload unit test coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./unit_coverage.xml
+          flags: unittests
+          fail_ci_if_error: true
+
+  integration-test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:6.2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'  # Adjust based on pyproject.toml
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pypoetry/virtualenvs
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-root
+
+      - name: Run integration tests with coverage
+        env:
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          poetry run pytest test_producer.py -m real_redis --asyncio-mode=auto --cov=redisaq --cov-report=xml:integration_coverage.xml
+
+      - name: Upload integration test coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./integration_coverage.xml
+          flags: integrationtests
+          fail_ci_if_error: true

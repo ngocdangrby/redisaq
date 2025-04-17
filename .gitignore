@@ -13,3 +13,6 @@ venv/
 
 # IDEs
 .idea/
+
+dist/
+/.coverage
