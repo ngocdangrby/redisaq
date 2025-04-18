@@ -7,6 +7,7 @@ Implements the Producer class for enqueuing messages to Redis Streams.
 import asyncio
 import hashlib
 import logging
+import time
 
 import orjson
 import uuid
@@ -210,6 +211,6 @@ class Producer(TopicOperator):
             self._topic_keys.add_partition(msg_partition)
 
         message.partition = msg_partition
-        message.enqueued_at = int(asyncio.get_event_loop().time())
+        message.enqueued_at = int(time.time())
 
         return message

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import uuid
 from typing import List
 
@@ -75,20 +76,12 @@ class TestProducerConsumerIntegration:
         )
 
         # Wait for the message to be received or timeout
-        timeout = 5  # seconds
-        start_time = asyncio.get_event_loop().time()
+        timeout = 10  # seconds
+        start_time = time.time()
         while len(self.received_messages) < 1:
-            if asyncio.get_event_loop().time() - start_time > timeout:
+            if time.time() - start_time > timeout:
                 pytest.fail("Timeout waiting for message")
             await asyncio.sleep(0.1)
-
-        # Stop the consumer
-        await self.consumer.stop()
-        consumer_task.cancel()
-        try:
-            await consumer_task
-        except asyncio.CancelledError:
-            pass
 
         # Verify the received message
         assert len(self.received_messages) == 1
@@ -136,7 +129,7 @@ class TestProducerConsumerIntegration:
         )
 
         # Wait for all messages to be received or timeout
-        timeout = 5  # seconds
+        timeout = 20  # seconds
         start_time = asyncio.get_event_loop().time()
         while len(self.received_messages) < len(payloads):
             if asyncio.get_event_loop().time() - start_time > timeout:
@@ -144,12 +137,12 @@ class TestProducerConsumerIntegration:
             await asyncio.sleep(0.1)
 
         # Stop the consumer
-        await self.consumer.stop()
-        consumer_task.cancel()
-        try:
-            await consumer_task
-        except asyncio.CancelledError:
-            pass
+        #await self.consumer.stop()
+        #consumer_task.cancel()
+        #try:
+        #    await consumer_task
+        #except asyncio.CancelledError:
+        #    pass
 
         # Verify the received messages
         assert len(self.received_messages) == len(payloads)

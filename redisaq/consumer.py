@@ -209,6 +209,7 @@ class Consumer(TopicOperator):
         ]
         await asyncio.gather(*tasks)
         self.logger.info(f"Stopped!")
+        self._rebalance_event.set()
         self._stopped_event.set()
 
     async def _consume(self):
@@ -217,6 +218,7 @@ class Consumer(TopicOperator):
             if len(pending_messages) > 0:
                 for msg_id, pending_message in pending_messages:
                     try:
+                        pending_message['payload'] = self.deserializer.loads(pending_message['payload'])
                         message = Message.from_dict(pending_message)
                         await self.callback(message)
                     except Exception as e:
@@ -238,6 +240,7 @@ class Consumer(TopicOperator):
                     return
 
                 stream, [(msg_id, msg)] = messages[0]
+                msg['payload'] = self.deserializer.loads(msg['payload'])
                 message = Message.from_dict(msg)
                 try:
                     await self.callback(message)
@@ -268,6 +271,7 @@ class Consumer(TopicOperator):
         ]
         await asyncio.gather(*tasks)
         self.logger.info(f"Stopped!")
+        self._rebalance_event.set()
         self._stopped_event.set()
 
     async def _consume_batch(self):
@@ -277,7 +281,10 @@ class Consumer(TopicOperator):
                 try:
                     messages = []
                     for msg_id, pending_message in pending_messages:
-                        messages.append(Message.from_dict(pending_message))
+                        pending_message['payload'] = self.deserializer.loads(
+                            pending_message['payload'])
+                        msg = Message.from_dict(pending_message)
+                        messages.append(msg)
 
                     await self.callback(messages)
                 except Exception as e:
@@ -302,6 +309,7 @@ class Consumer(TopicOperator):
                 all_messages = []
                 for stream, messages in result:
                     for (msg_id, msg) in messages:
+                        msg['payload'] = self.deserializer.loads(msg['payload'])
                         message = Message.from_dict(msg)
                         message.stream = stream
                         all_messages.append(message)
@@ -399,6 +407,7 @@ class Consumer(TopicOperator):
         self._stopped_event.clear()
         self._is_start = False
         self.logger.info(f"Stopping...")
+        self._rebalance_event.set()
         await self._stopped_event.wait()
 
     async def _prepare_for_consume(self):
@@ -430,7 +439,7 @@ class Consumer(TopicOperator):
             else:
                 if not last_is_consuming:
                     self.logger.info("Change from paused to resumed. Starting...")
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(2)
                     if not self._is_consuming:
                         last_is_consuming = self._is_consuming
                         continue

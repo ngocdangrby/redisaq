@@ -1,2 +1,2 @@
 run-test:
-	poetry run pytest tests/test_producer.py --asyncio-mode=auto --cov=redisaq
+	poetry run pytest tests/* --asyncio-mode=auto --cov=redisaq

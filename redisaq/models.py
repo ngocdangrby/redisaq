@@ -45,14 +45,15 @@ class Message:
     @classmethod
     def from_dict(cls, data: Dict):
         created_at = int(data.get("created_at", datetime.utcnow().timestamp()))
+        partition = int(data.get("partition", None)) if data.get("partition", None) is not None else None
         return cls(
             msg_id=data.get("msg_id"),
             topic=data.get("topic", ""),
             payload=data.get("payload", {}),
             partition_key=data.get("partition_key", ""),
-            partition=data.get("partition", None),
+            partition=partition,
             created_at=created_at,
-            enqueued_at=data.get("enqueued_at", None),
+            enqueued_at=int(data.get("enqueued_at", None)),
             timeout=float(data.get("timeout", 0))
         )
 
