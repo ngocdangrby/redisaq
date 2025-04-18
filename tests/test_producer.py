@@ -1,12 +1,7 @@
-from typing import AsyncIterator
 from unittest.mock import AsyncMock
 
-import aioredis
-import fakeredis.aioredis
 import orjson
 import pytest
-import pytest_asyncio
-from redis import asyncio as redis
 
 from redisaq.errors import PartitionKeyError
 from redisaq.keys import TopicKeys
@@ -15,24 +10,17 @@ from redisaq.producer import Producer
 from redisaq.utils import APPLICATION_METADATA_TOPICS
 
 
-@pytest_asyncio.fixture
-async def redis_client() -> AsyncIterator[redis.Redis]:
-    async with fakeredis.FakeAsyncRedis(decode_responses=True) as client:
-        yield client
-        await client.close()
-
-
 @pytest.fixture
 def producer(redis_client, monkeypatch):
     # Patch aioredis.from_url to return fake_redis
     monkeypatch.setattr("aioredis.from_url", AsyncMock(return_value=redis_client))
-    return Producer(topic="test_topic", redis_url="redis://localhost:6379/0", init_partitions=2)
+    return Producer(topic="test_topic", redis_url="redis://localhost:6379/1", init_partitions=2)
 
 
 @pytest.mark.asyncio
 async def test_producer_initialization(producer):
     assert producer.topic == "test_topic"
-    assert producer.redis_url == "redis://localhost:6379/0"
+    assert producer.redis_url == "redis://localhost:6379/1"
     assert producer._init_partitions == 2
     assert producer.maxlen is None
     assert producer.approximate is True

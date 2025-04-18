@@ -19,7 +19,7 @@ The example simulates an email-sending system:
 ### Key Features
 - **Batch Production**: Producer supports `batch_enqueue` to add multiple jobs efficiently in a single operation, distributing them across partitions.
 - **Consumer Groups**: Consumers read jobs via `XREADGROUP` and acknowledge with `XACK`, enabling reconsumption by creating a new group.
-- **Reconsumption**: Jobs remain in streams (limited by `maxlen=1000`), allowing a new group (e.g., `email_group_v2`) to reprocess all jobs from the start.
+- **Reconsumption**: Jobs remain in streams (limited by `maxlen=1000`), allowing a new group (e.g., `email_group_v2`) to reprocess all jobs from the consume.
 - **Partition Rebalancing**: Consumers self-assign partitions (round-robin) and rebalance when new consumers join or crash, with pause/resume to avoid conflicts.
 - **Heartbeats**: Each consumer maintains a heartbeat key (`redisaq:worker:send_email:email_group:<consumer_id>`, TTL 10s, updated every 5s) for crash detection.
 - **Crash Detection**: If a consumer's heartbeat expires after 10s, others rebalance to take over its partitions.
@@ -68,7 +68,7 @@ The example simulates an email-sending system:
 
 ### Testing Rebalancing
 To test partition rebalancing:
-1. While `consumer1.py` and `consumer2.py` are running, start a third consumer:
+1. While `consumer1.py` and `consumer2.py` are running, consume a third consumer:
    ```bash
    python consumer3.py
    ```

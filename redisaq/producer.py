@@ -201,7 +201,7 @@ class Producer(TopicOperator):
         msg_partition = message.get_partition()
         if msg_partition is None:
             if message.partition_key:
-                msg_partition = int(hashlib.md5(message.payload[message.partition_key].encode()).hexdigest(),
+                msg_partition = int(hashlib.md5(str(message.payload[message.partition_key]).encode()).hexdigest(),
                                     16) % await self.get_num_partitions()
             else:
                 msg_partition = (self._last_partition_enqueue + 1) % await self.get_num_partitions()

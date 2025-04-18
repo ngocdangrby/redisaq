@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable, Awaitable, List
 import uuid
 
 from redisaq.errors import PartitionKeyError
@@ -25,6 +25,7 @@ class Message:
         self.enqueued_at = enqueued_at
         self.timeout = timeout
         self.partition = partition
+        self.stream: Optional[str] = None
 
         if self.partition_key and self.partition_key not in self.payload:
             raise PartitionKeyError(f"partition key `{self.partition_key}` is not in payload")
@@ -57,3 +58,7 @@ class Message:
 
     def get_partition(self) -> Optional[int]:
         return None
+
+
+SingleCallback = Callable[[Message], Awaitable]
+BatchCallback = Callable[[List[Message]], Awaitable]

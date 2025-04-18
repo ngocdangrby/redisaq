@@ -45,7 +45,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def main():
-    producer = Producer(topic="send_email", redis_url="redis://localhost:6379/0", maxlen=1000)
+    producer = Producer(topic="send_email", redis_url="redis://localhost:6379/0", maxlen=10000)
     await producer.connect()
     job_count = 0
     max_speed = 0
@@ -79,11 +79,11 @@ async def main():
                 max_speed = max(max_speed, speed)
                 logger.info(f"Speed: {speed} msgs/s {job_count}")
 
-            if job_count >= 100000:
-                speed = round(job_count / (time.time() - start_time) * 100) / 100
-                max_speed = max(max_speed, speed)
-                logger.info(f"Speed: {speed} msgs/s {job_count}")
-                break
+            # if job_count >= 100000:
+            #     speed = round(job_count / (time.time() - start_time) * 100) / 100
+            #     max_speed = max(max_speed, speed)
+            #     logger.info(f"Speed: {speed} msgs/s {job_count}")
+            #     break
     except KeyboardInterrupt:
         logger.info("Stopping producer")
     finally:

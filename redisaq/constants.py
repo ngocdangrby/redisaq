@@ -8,8 +8,6 @@ TOPIC_KEY = "t"
 
 CONSUMER_KEY = "c"
 
-CONSUMER_READY_KEY = "cready"
-
 CONSUMER_GROUP_KEY = "cg"
 
 REBALANCE_CHANNEL_KEY = "rc"

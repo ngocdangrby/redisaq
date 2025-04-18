@@ -15,8 +15,5 @@ def get_redis_key_for_topic_rebalance_channel(topic: str):
 def get_redis_key_for_topic_consumer_group_consumer(topic: str, consumer_group: str):
     return f"{APPLICATION_PREFIX}:{topic}:{consumer_group}:{CONSUMER_KEY}"
 
-def get_redis_key_for_topic_consumer_group_consumer_ready(topic: str, consumer_group: str):
-    return f"{APPLICATION_PREFIX}:{topic}:{consumer_group}:{CONSUMER_READY_KEY}"
-
 def get_redis_key_for_topic_partition_messages(topic: str, partition: int):
     return f"{APPLICATION_PREFIX}:{topic}:{partition}:{MESSAGE_KEY}"

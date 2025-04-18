@@ -60,7 +60,7 @@ async def main():
         redis_url="redis://localhost:6379"
     )
     try:
-        await consumer.start()
+        await consumer.consume()
     except KeyboardInterrupt:
         logger.info("Stopping consumer")
     finally:

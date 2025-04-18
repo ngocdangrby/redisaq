@@ -8,7 +8,6 @@ from redisaq.utils import get_redis_key_for_topic_partition, get_redis_key_for_t
 class TopicConsumerGroupKeys:
     def __init__(self, topic: str, consumer_group: str):
         self.consumer_key = get_redis_key_for_topic_consumer_group_consumer(topic=topic, consumer_group=consumer_group)
-        self.consumer_ready_key = get_redis_key_for_topic_consumer_group_consumer_ready(topic=topic, consumer_group=consumer_group)
 
 
 class TopicPartitionKeys:
