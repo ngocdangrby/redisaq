@@ -3,7 +3,9 @@ import asyncio
 import pytest
 import pytest_asyncio
 
+from redisaq import Message, Producer
 from redisaq.consumer import Consumer
+from redisaq.utils import get_redis_key_for_topic_partition_messages
 
 
 # Fixture to create a Consumer instance with fakeredis
@@ -233,7 +235,6 @@ async def test_wait_for_rebalance(consumer, mock_aioredis_from_url):
 @pytest.mark.asyncio
 async def test_consume(consumer, mock_aioredis_from_url):
     """Test the consume method."""
-
     async def callback(message):
         pass
 
@@ -250,6 +251,181 @@ async def test_consume(consumer, mock_aioredis_from_url):
     await asyncio.sleep(0.2)
     consumer._is_start = False
     await task
+
+@pytest.mark.asyncio
+async def test_read_single_message(consumer, mock_aioredis_from_url):
+    """Test read single message method."""
+
+    producer = Producer(
+        topic=consumer.topic,
+        redis_url="redis://localhost:6379/1",  # URL is mocked
+        init_partitions=2,
+    )
+    await producer.connect()
+
+    async def callback(message):
+        pass
+
+    async def get_num_partitions():
+        return 2
+
+    consumer._is_start = True
+    consumer.get_num_partitions = get_num_partitions
+    await consumer.connect()
+    consumers_key = f"{consumer._topic_keys.consumer_group_keys.consumer_key}:{consumer.consumer_name}"
+    await consumer.redis.set(consumers_key, consumer.serializer.dumps(True))
+    consumer.partitions = [0, 1]
+    await producer.enqueue({
+        "data": "1",
+        "id": 1
+    }, partition_key="id")
+    await producer.enqueue({
+        "data": "11",
+        "id": 1
+    }, partition_key="id")
+    await producer.enqueue({
+        "data": "2",
+        "id": 2
+    }, partition_key="id")
+    await producer.enqueue({
+        "data": "22",
+        "id": 2
+    }, partition_key="id")
+
+    # first message from stream with partition = 0
+    assert consumer.last_read_partition_index == -1
+    message_streams = await consumer._read_messages_from_streams(count=1)
+    assert consumer.last_read_partition_index == 0
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[0].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 1
+    _, message = messages[0]
+    assert isinstance(message['payload'], str)
+    assert consumer.deserializer.loads(message['payload'])['id'] == 2
+    assert consumer.deserializer.loads(message['payload'])['data'] == "2"
+
+    # first message from stream with partition = 1
+    message_streams = await consumer._read_messages_from_streams(count=1)
+    assert consumer.last_read_partition_index == 1
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[1].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 1
+    _, message = messages[0]
+    assert isinstance(message['payload'], str)
+    assert consumer.deserializer.loads(message['payload'])['id'] == 1
+    assert consumer.deserializer.loads(message['payload'])['data'] == "1"
+
+    # second message from stream with partition = 0
+    message_streams = await consumer._read_messages_from_streams(count=1)
+    assert consumer.last_read_partition_index == 0
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[0].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 1
+    _, message = messages[0]
+    assert isinstance(message['payload'], str)
+    assert consumer.deserializer.loads(message['payload'])['id'] == 2
+    assert consumer.deserializer.loads(message['payload'])['data'] == "22"
+
+    # second message from stream with partition = 1
+    message_streams = await consumer._read_messages_from_streams(count=1)
+    assert consumer.last_read_partition_index == 1
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[1].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 1
+    _, message = messages[0]
+    assert isinstance(message['payload'], str)
+    assert consumer.deserializer.loads(message['payload'])['id'] == 1
+    assert consumer.deserializer.loads(message['payload'])['data'] == "11"
+
+async def test_read_batch_messages(consumer, mock_aioredis_from_url):
+    """Test read batch messages method."""
+
+    producer = Producer(
+        topic=consumer.topic,
+        redis_url="redis://localhost:6379/1",  # URL is mocked
+        init_partitions=2,
+    )
+    await producer.connect()
+
+    async def callback(message):
+        pass
+
+    async def get_num_partitions():
+        return 2
+
+    consumer._is_start = True
+    consumer.get_num_partitions = get_num_partitions
+    await consumer.connect()
+    consumers_key = f"{consumer._topic_keys.consumer_group_keys.consumer_key}:{consumer.consumer_name}"
+    await consumer.redis.set(consumers_key, consumer.serializer.dumps(True))
+    consumer.partitions = [0, 1]
+    await producer.enqueue({
+        "data": "1",
+        "id": 1
+    }, partition_key="id")
+    await producer.enqueue({
+        "data": "11",
+        "id": 1
+    }, partition_key="id")
+    await producer.enqueue({
+        "data": "2",
+        "id": 2
+    }, partition_key="id")
+    await producer.enqueue({
+        "data": "22",
+        "id": 2
+    }, partition_key="id")
+
+    # messages from stream with partition = 0
+    assert consumer.last_read_partition_index == -1
+    message_streams = await consumer._read_messages_from_streams(count=2)
+    assert consumer.last_read_partition_index == 0
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[0].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 2
+    for _, message in messages:
+        assert isinstance(message['payload'], str)
+        assert consumer.deserializer.loads(message['payload'])['id'] == 2
+
+    # messages from stream with partition = 1
+    message_streams = await consumer._read_messages_from_streams(count=2)
+    assert consumer.last_read_partition_index == 1
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[1].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 2
+    for _, message in messages:
+        assert isinstance(message['payload'], str)
+        assert consumer.deserializer.loads(message['payload'])['id'] == 1
+
+    # messages from stream with partition = 0
+    message_streams = await consumer._read_messages_from_streams(count=2)
+    assert consumer.last_read_partition_index == 0
+    assert message_streams is not None
+    assert len(message_streams) == 0
+
+    # messages from stream with partition = 1
+    message_streams = await consumer._read_messages_from_streams(count=2)
+    assert consumer.last_read_partition_index == 1
+    assert message_streams is not None
+    assert len(message_streams) == 0
 
 
 @pytest.mark.asyncio

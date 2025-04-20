@@ -23,6 +23,7 @@ class TestProducerConsumerIntegration:
         self.producer = None
         self.consumer = None
         self.received_messages = []
+        self.max_size = 0
 
     async def teardown_method(self):
         # Clean up Producer
@@ -35,6 +36,7 @@ class TestProducerConsumerIntegration:
     async def message_callback(self, messages: List[Message]):
         """Callback to collect received messages."""
         self.received_messages.extend(messages)
+        self.max_size = max(self.max_size, len(messages))
         self.logger.info(f"Received {len(messages)} messages")
 
     async def single_message_callback(self, message: Message):
@@ -70,6 +72,9 @@ class TestProducerConsumerIntegration:
         payload = {"data": "test_message", "id": 1}
         msg_id = await self.producer.enqueue(payload=payload, partition_key="id")
 
+        payload2 = {"data": "test_message", "id": 2}
+        msg_id2 = await self.producer.enqueue(payload=payload, partition_key="id")
+
         # Start consumer in the background
         consumer_task = asyncio.create_task(
             self.consumer.consume(callback=self.single_message_callback)
@@ -84,13 +89,21 @@ class TestProducerConsumerIntegration:
             await asyncio.sleep(0.1)
 
         # Verify the received message
-        assert len(self.received_messages) == 1
+        assert len(self.received_messages) == 2
         received_message = self.received_messages[0]
+        assert received_message.msg_id == msg_id2
+        assert received_message.topic == self.topic
+        assert received_message.payload == payload2
+        assert received_message.partition_key == "id"
+        assert received_message.partition == 0  # Should be in one of the partitions
+        assert received_message.enqueued_at is not None
+
+        received_message = self.received_messages[1]
         assert received_message.msg_id == msg_id
         assert received_message.topic == self.topic
         assert received_message.payload == payload
         assert received_message.partition_key == "id"
-        assert received_message.partition in [0, 1]  # Should be in one of the partitions
+        assert received_message.partition == 1  # Should be in one of the partitions
         assert received_message.enqueued_at is not None
 
     async def test_producer_consumer_batch_messages(self, redis_client, mock_aioredis_from_url):
