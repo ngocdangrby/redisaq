@@ -43,7 +43,7 @@ jobs:
 
       - name: Run unit tests with coverage
         run: |
-          poetry run pytest test/* --asyncio-mode=auto --cov=redisaq --cov-report=xml:unit_coverage.xml
+          poetry run pytest tests/* --asyncio-mode=auto --cov=redisaq --cov-report=xml:unit_coverage.xml
 
       - name: Upload unit test coverage to Codecov
         uses: codecov/codecov-action@v3
