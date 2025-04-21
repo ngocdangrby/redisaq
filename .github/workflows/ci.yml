@@ -36,7 +36,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --no-root
+          poetry install
 
 #      - name: Run mypy (static type checking)
 #        run: poetry run mypy .
