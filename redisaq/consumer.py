@@ -432,7 +432,7 @@ class Consumer(TopicOperator):
         self.logger.info(f"Preparing for consuming...")
         await self.signal_rebalance()
 
-    async def get_pending_messages(self, count: int):
+    async def get_pending_messages(self, count: int) -> List[Message]:
         return []
 
     async def _do_consume(self, is_batch: bool):

@@ -30,10 +30,10 @@ class TopicKeys:
     def has_partition(self, partition: int) -> bool:
         return partition in self.partition_keys
 
-    def add_partition(self, partition: int):
+    def add_partition(self, partition: int) -> None:
         self.partition_keys[partition] = TopicPartitionKeys(topic=self.topic, partition=partition)
 
-    def set_consumer_group(self, consumer_group: str):
+    def set_consumer_group(self, consumer_group: str) -> None:
         self.consumer_group_keys = TopicConsumerGroupKeys(
             topic=self.topic,
             consumer_group=consumer_group,

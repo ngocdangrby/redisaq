@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any, Callable, Awaitable, List
+from typing import Optional, Dict, Any, Callable, Awaitable, List, Union
 import uuid
 
 from redisaq.errors import PartitionKeyError
@@ -15,7 +15,7 @@ class Message:
         created_at: Optional[int] = None,
         enqueued_at: Optional[int] = None,
         timeout: float = 0,
-        partition: int = None
+        partition: Optional[int] = None
     ):
         self.msg_id = msg_id or str(uuid.uuid4())
         self.topic = topic
@@ -30,7 +30,7 @@ class Message:
         if self.partition_key and self.partition_key not in self.payload:
             raise PartitionKeyError(f"partition key `{self.partition_key}` is not in payload")
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Union[str, int, float, bytes, memoryview]]:
         return {
             "msg_id": self.msg_id,
             "topic": self.topic,
@@ -43,7 +43,7 @@ class Message:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict):
+    def from_dict(cls, data: Dict[str, Any]) -> "Message":
         created_at = int(data.get("created_at", datetime.utcnow().timestamp()))
         partition = int(data.get("partition", None)) if data.get("partition", None) is not None else None
         return cls(
@@ -61,5 +61,5 @@ class Message:
         return None
 
 
-SingleCallback = Callable[[Message], Awaitable]
-BatchCallback = Callable[[List[Message]], Awaitable]
+SingleCallback = Callable[[Message], Awaitable[Any]]
+BatchCallback = Callable[[List[Message]], Awaitable[Any]]

@@ -4,16 +4,14 @@ Producer module for redisaq
 Implements the Producer class for enqueuing messages to Redis Streams.
 """
 
-import asyncio
 import hashlib
 import logging
 import time
-
-import orjson
 import uuid
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 import aioredis
+import orjson
 
 from redisaq.common import TopicOperator
 from redisaq.constants import APPLICATION_PREFIX
@@ -24,6 +22,7 @@ from redisaq.utils import APPLICATION_METADATA_TOPICS
 
 class Producer(TopicOperator):
     """Producer for enqueuing messages to Redis Streams."""
+
     def __init__(
         self,
         topic: str,
@@ -31,9 +30,9 @@ class Producer(TopicOperator):
         init_partitions: int = 1,
         maxlen: Optional[int] = None,
         approximate: bool = True,
-        serializer=None,
-        debug=False,
-        logger=None,
+        serializer: Any = None,
+        debug: bool = False,
+        logger: Optional[logging.Logger] = None,
     ):
         self.topic = topic
         self.redis_url = redis_url
@@ -50,7 +49,8 @@ class Producer(TopicOperator):
     async def request_partition_increase(self, num_partitions: int) -> None:
         """Request an increase in the number of partitions."""
         if self.redis is None:
-            raise RuntimeError("Redis not connected. Please run connect() function first")
+            raise RuntimeError(
+                "Redis not connected. Please run connect() function first")
 
         try:
             current = await self.get_num_partitions()
@@ -64,7 +64,10 @@ class Producer(TopicOperator):
     async def connect(self) -> None:
         """Connect to Redis."""
         if self.redis is None:
-            self.redis = await aioredis.from_url(self.redis_url, decode_responses=True)
+            self.redis = await aioredis.from_url(
+                self.redis_url,
+                decode_responses=True,
+            )
 
         if self.redis is None:
             raise ValueError("Redis is not connected!")
@@ -87,25 +90,28 @@ class Producer(TopicOperator):
     ) -> str:
         """Enqueue a single message to the specified partition."""
         if self.redis is None:
-            raise RuntimeError("Redis not connected. Please run connect() function first")
+            raise RuntimeError(
+                "Redis not connected. Please run connect() function first")
 
         try:
             message = await self._process_message(message)
-            final_maxlen = maxlen if maxlen is not None else self.maxlen
-            final_approximate = approximate if approximate is not None else self.approximate
+            if message.partition is not None:
+                final_maxlen = maxlen if maxlen is not None else self.maxlen
+                final_approximate = approximate if approximate is not None else self.approximate
 
-            msg_dict = message.to_dict()
-            msg_dict['payload'] = self.serializer.dumps(msg_dict['payload'])
-            await self.redis.xadd(
-                name=self._topic_keys.partition_keys[message.partition].stream_key,
-                fields=msg_dict,
-                maxlen=final_maxlen,
-                approximate=final_approximate
-            )
-            self._last_partition_enqueue = message.partition
-            self.logger.debug(
-                f"Enqueued message {message.msg_id} to {self._topic_keys.partition_keys[message.partition].stream_key}")
-            return message.msg_id
+                msg_dict = message.to_dict()
+                msg_dict['payload'] = self.serializer.dumps(msg_dict['payload'])
+
+                await self.redis.xadd(
+                    name=self._topic_keys.partition_keys[message.partition].stream_key,
+                    fields=msg_dict,
+                    maxlen=final_maxlen,
+                    approximate=final_approximate
+                )
+                self._last_partition_enqueue = message.partition
+                self.logger.debug(
+                    f"Enqueued message {message.msg_id} to {self._topic_keys.partition_keys[message.partition].stream_key}")
+                return message.msg_id
         except Exception as e:
             self.logger.error(f"Error enqueuing message: {e}", exc_info=e)
             raise
@@ -122,7 +128,8 @@ class Producer(TopicOperator):
         return await self._enqueue(
             maxlen=maxlen,
             approximate=approximate,
-            message=Message(topic=self.topic, payload=payload, timeout=timeout, partition_key=partition_key)
+            message=Message(topic=self.topic, payload=payload, timeout=timeout,
+                            partition_key=partition_key)
         )
 
     async def _batch_enqueue(
@@ -133,7 +140,8 @@ class Producer(TopicOperator):
     ) -> List[str]:
         """Enqueue multiple messages to the topic."""
         if self.redis is None:
-            raise RuntimeError("Redis not connected. Please run connect() function first")
+            raise RuntimeError(
+                "Redis not connected. Please run connect() function first")
 
         try:
             job_ids = []
@@ -148,7 +156,8 @@ class Producer(TopicOperator):
                     msg_dict['payload'] = self.serializer.dumps(msg_dict['payload'])
                     # noinspection PyAsyncCall
                     pipe.xadd(
-                        name=self._topic_keys.partition_keys[message.partition].stream_key,
+                        name=self._topic_keys.partition_keys[
+                            message.partition].stream_key,
                         fields=msg_dict,
                         maxlen=final_maxlen,
                         approximate=final_approximate
@@ -162,7 +171,8 @@ class Producer(TopicOperator):
 
             # Log streams based on saved partitions
             for job_id, partition in zip(job_ids, partitions):
-                self.logger.debug(f"Enqueued message {job_id} to {self._topic_keys.partition_keys[partition].stream_key}")
+                self.logger.debug(
+                    f"Enqueued message {job_id} to {self._topic_keys.partition_keys[partition].stream_key}")
 
             return job_ids
         except Exception as e:
@@ -177,7 +187,8 @@ class Producer(TopicOperator):
         maxlen: Optional[int] = None,
         approximate: Optional[bool] = None
     ) -> List[str]:
-        messages = [Message(topic=self.topic, payload=payload, timeout=timeout, partition_key=partition_key) for payload
+        messages = [Message(topic=self.topic, payload=payload, timeout=timeout,
+                            partition_key=partition_key) for payload
                     in payloads]
         return await self._batch_enqueue(
             approximate=approximate,
@@ -185,27 +196,29 @@ class Producer(TopicOperator):
             messages=messages,
         )
 
-    async def _create_topic_if_not_exist(self):
+    async def _create_topic_if_not_exist(self) -> None:
         added = await self.redis.sadd(APPLICATION_METADATA_TOPICS, self.topic)
         if added:
             self.logger.info(f"New topic {self.topic} is created!")
 
-    async def _create_partitions(self):
+    async def _create_partitions(self) -> None:
         partitions = await self.get_num_partitions()
         if self._init_partitions > partitions:
             await self.request_partition_increase(self._init_partitions)
 
-    async def _process_message(self, message: Message):
+    async def _process_message(self, message: Message) -> Message:
         job_id = str(uuid.uuid4())
         message.msg_id = job_id
         # Detect partition
         msg_partition = message.get_partition()
         if msg_partition is None:
             if message.partition_key:
-                msg_partition = int(hashlib.md5(str(message.payload[message.partition_key]).encode()).hexdigest(),
+                msg_partition = int(hashlib.md5(
+                    str(message.payload[message.partition_key]).encode()).hexdigest(),
                                     16) % await self.get_num_partitions()
             else:
-                msg_partition = (self._last_partition_enqueue + 1) % await self.get_num_partitions()
+                msg_partition = (
+                                    self._last_partition_enqueue + 1) % await self.get_num_partitions()
 
         if not self._topic_keys.has_partition(msg_partition):
             self._topic_keys.add_partition(msg_partition)
