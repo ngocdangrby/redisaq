@@ -14,7 +14,9 @@ from redisaq.utils import APPLICATION_METADATA_TOPICS
 def producer(redis_client, monkeypatch):
     # Patch aioredis.from_url to return fake_redis
     monkeypatch.setattr("aioredis.from_url", AsyncMock(return_value=redis_client))
-    return Producer(topic="test_topic", redis_url="redis://localhost:6379/1", init_partitions=2)
+    return Producer(
+        topic="test_topic", redis_url="redis://localhost:6379/1", init_partitions=2
+    )
 
 
 @pytest.mark.asyncio
@@ -26,7 +28,7 @@ async def test_producer_initialization(producer):
     assert producer.approximate is True
     assert isinstance(producer._topic_keys, TopicKeys)
     assert producer._last_partition_enqueue == -1
-    assert producer.serializer == orjson
+    assert producer.serializer == orjson.dumps
 
 
 @pytest.mark.asyncio
@@ -93,7 +95,9 @@ async def test_enqueue_message(producer, redis_client):
     assert isinstance(msg_id, str)
 
     # Check if message was enqueued in Redis stream
-    stream_key = producer._topic_keys.partition_keys[producer._last_partition_enqueue].stream_key
+    stream_key = producer._topic_keys.partition_keys[
+        producer._last_partition_enqueue
+    ].stream_key
     messages = await redis_client.xrange(stream_key)
     assert len(messages) == 1
     assert messages[0][1]["msg_id"] == msg_id

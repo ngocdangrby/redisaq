@@ -8,12 +8,16 @@ from redisaq import Consumer, Message
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def process_job(messages: List[Message]):
     logger.info(f"Consumer 2 processing {len(messages)} messages")
     for message in messages:
-        logger.info(f"Consumer 2 processing job {message.msg_id} with payload {message.payload}")
+        logger.info(
+            f"Consumer 2 processing job {message.msg_id} with payload {message.payload}"
+        )
         await asyncio.sleep(random.uniform(0.5, 1.5))  # Simulate processing
         logger.info(f"Consumer 2 completed job {message.msg_id}")
+
 
 async def main():
     consumer = Consumer(
@@ -29,6 +33,7 @@ async def main():
         logger.info("Stopping consumer")
     finally:
         await consumer.stop()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

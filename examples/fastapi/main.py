@@ -43,8 +43,10 @@ Expected Behavior:
 
 import logging
 from typing import List
+
 from fastapi import FastAPI
 from pydantic import BaseModel
+
 from redisaq import Producer
 
 logging.basicConfig(level=logging.INFO)
@@ -55,27 +57,33 @@ app = FastAPI()
 # Producer instance
 producer = Producer(topic="send_email", redis_url="redis://localhost:6379", maxlen=1000)
 
+
 @app.on_event("startup")
 async def startup_event():
     await producer.connect()
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     await producer.close()
+
 
 class JobPayload(BaseModel):
     to: str
     subject: str
     body: str
 
+
 class EnqueueRequest(BaseModel):
     jobs: List[JobPayload]
+
 
 @app.post("/jobs")
 async def enqueue_jobs(request: EnqueueRequest):
     payloads = [job.model_dump() for job in request.jobs]
     job_ids = await producer.batch_enqueue(payloads)
     return {"job_ids": job_ids}
+
 
 @app.get("/status")
 async def get_status():

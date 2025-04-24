@@ -14,7 +14,9 @@ class TopicOperator:
     async def get_num_partitions(self) -> int:
         """Get the number of partitions for the topic."""
         if self.redis is None:
-            raise RuntimeError("Redis not connected. Please run connect() function first")
+            raise RuntimeError(
+                "Redis not connected. Please run connect() function first"
+            )
 
         try:
             num_partitions = await self.redis.get(self._topic_keys.partition_key)

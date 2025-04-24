@@ -41,15 +41,18 @@ Expected Behavior:
 
 import asyncio
 import logging
+
 from redisaq import Consumer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def process_job(job):
     logger.info(f"API consumer processing message {job.id} with payload {job.payload}")
     await asyncio.sleep(1)  # Simulate processing
     logger.info(f"API consumer completed message {job.id}")
+
 
 async def main():
     consumer = Consumer(
@@ -57,7 +60,7 @@ async def main():
         group="email_group",
         consumer_id="api_consumer",
         process_job=process_job,
-        redis_url="redis://localhost:6379"
+        redis_url="redis://localhost:6379",
     )
     try:
         await consumer.consume()
@@ -65,6 +68,7 @@ async def main():
         logger.info("Stopping consumer")
     finally:
         await consumer.stop()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

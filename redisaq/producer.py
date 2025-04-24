@@ -8,7 +8,7 @@ import hashlib
 import logging
 import time
 import uuid
-from typing import Optional, List, Dict, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 import aioredis
 import orjson
@@ -18,6 +18,11 @@ from redisaq.constants import APPLICATION_PREFIX
 from redisaq.keys import TopicKeys
 from redisaq.models import Message
 from redisaq.utils import APPLICATION_METADATA_TOPICS
+
+if TYPE_CHECKING:
+    from redis.typing import EncodableT, FieldT
+
+    from redisaq.types import Serializer
 
 
 class Producer(TopicOperator):
@@ -30,7 +35,7 @@ class Producer(TopicOperator):
         init_partitions: int = 1,
         maxlen: Optional[int] = None,
         approximate: bool = True,
-        serializer: Any = None,
+        serializer: Optional[Serializer] = None,
         debug: bool = False,
         logger: Optional[logging.Logger] = None,
     ):
@@ -42,7 +47,7 @@ class Producer(TopicOperator):
         self._init_partitions = init_partitions
         self._topic_keys = TopicKeys(self.topic)
         self._last_partition_enqueue = -1
-        self.serializer = serializer or orjson
+        self.serializer = serializer or orjson.dumps
         self.logger = logger or logging.getLogger(f"{APPLICATION_PREFIX}.producer")
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
@@ -50,7 +55,8 @@ class Producer(TopicOperator):
         """Request an increase in the number of partitions."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis not connected. Please run connect() function first")
+                "Redis not connected. Please run connect() function first"
+            )
 
         try:
             current = await self.get_num_partitions()
@@ -86,81 +92,92 @@ class Producer(TopicOperator):
         self,
         message: Message,
         maxlen: Optional[int] = None,
-        approximate: Optional[bool] = None
+        approximate: Optional[bool] = None,
     ) -> str:
         """Enqueue a single message to the specified partition."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis not connected. Please run connect() function first")
+                "Redis not connected. Please run connect() function first"
+            )
 
         try:
             message = await self._process_message(message)
             if message.partition is not None:
                 final_maxlen = maxlen if maxlen is not None else self.maxlen
-                final_approximate = approximate if approximate is not None else self.approximate
-
-                msg_dict = message.to_dict()
-                msg_dict['payload'] = self.serializer.dumps(msg_dict['payload'])
+                final_approximate = (
+                    approximate if approximate is not None else self.approximate
+                )
 
                 await self.redis.xadd(
                     name=self._topic_keys.partition_keys[message.partition].stream_key,
-                    fields=msg_dict,
+                    fields=self._serialize(message),
                     maxlen=final_maxlen,
-                    approximate=final_approximate
+                    approximate=final_approximate,
                 )
                 self._last_partition_enqueue = message.partition
                 self.logger.debug(
-                    f"Enqueued message {message.msg_id} to {self._topic_keys.partition_keys[message.partition].stream_key}")
+                    f"Enqueued message {message.msg_id} to {self._topic_keys.partition_keys[message.partition].stream_key}"
+                )
                 return message.msg_id
+
+            raise ValueError("Partition is not set!")
         except Exception as e:
             self.logger.error(f"Error enqueuing message: {e}", exc_info=e)
             raise
 
     async def enqueue(
         self,
-        payload: Dict,
+        payload: Dict[str, Any],
         timeout: float = 0,
         partition_key: str = "",
         maxlen: Optional[int] = None,
-        approximate: Optional[bool] = None
+        approximate: Optional[bool] = None,
     ) -> str:
         """Enqueue a single message to the specified partition."""
         return await self._enqueue(
             maxlen=maxlen,
             approximate=approximate,
-            message=Message(topic=self.topic, payload=payload, timeout=timeout,
-                            partition_key=partition_key)
+            message=Message(
+                topic=self.topic,
+                payload=payload,
+                timeout=timeout,
+                partition_key=partition_key,
+            ),
         )
 
     async def _batch_enqueue(
         self,
         messages: List[Message],
         maxlen: Optional[int] = None,
-        approximate: Optional[bool] = None
+        approximate: Optional[bool] = None,
     ) -> List[str]:
         """Enqueue multiple messages to the topic."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis not connected. Please run connect() function first")
+                "Redis not connected. Please run connect() function first"
+            )
 
         try:
             job_ids = []
             partitions = []
             final_maxlen = maxlen if maxlen is not None else self.maxlen
-            final_approximate = approximate if approximate is not None else self.approximate
+            final_approximate = (
+                approximate if approximate is not None else self.approximate
+            )
             async with self.redis.pipeline() as pipe:
                 for message in messages:
                     message = await self._process_message(message)
+                    if message.partition is None:
+                        raise ValueError("Partition is not set!")
 
-                    msg_dict = message.to_dict()
-                    msg_dict['payload'] = self.serializer.dumps(msg_dict['payload'])
                     # noinspection PyAsyncCall
                     pipe.xadd(
                         name=self._topic_keys.partition_keys[
-                            message.partition].stream_key,
-                        fields=msg_dict,
+                            message.partition
+                        ].stream_key,
+                        fields=self._serialize(message),
                         maxlen=final_maxlen,
-                        approximate=final_approximate
+                        approximate=final_approximate,
                     )
                     self._last_partition_enqueue = message.partition
 
@@ -172,7 +189,8 @@ class Producer(TopicOperator):
             # Log streams based on saved partitions
             for job_id, partition in zip(job_ids, partitions):
                 self.logger.debug(
-                    f"Enqueued message {job_id} to {self._topic_keys.partition_keys[partition].stream_key}")
+                    f"Enqueued message {job_id} to {self._topic_keys.partition_keys[partition].stream_key}"
+                )
 
             return job_ids
         except Exception as e:
@@ -181,15 +199,21 @@ class Producer(TopicOperator):
 
     async def batch_enqueue(
         self,
-        payloads: List[Dict],
+        payloads: List[Dict[str, Any]],
         timeout: float = 0,
         partition_key: str = "",
         maxlen: Optional[int] = None,
-        approximate: Optional[bool] = None
+        approximate: Optional[bool] = None,
     ) -> List[str]:
-        messages = [Message(topic=self.topic, payload=payload, timeout=timeout,
-                            partition_key=partition_key) for payload
-                    in payloads]
+        messages = [
+            Message(
+                topic=self.topic,
+                payload=payload,
+                timeout=timeout,
+                partition_key=partition_key,
+            )
+            for payload in payloads
+        ]
         return await self._batch_enqueue(
             approximate=approximate,
             maxlen=maxlen,
@@ -197,6 +221,11 @@ class Producer(TopicOperator):
         )
 
     async def _create_topic_if_not_exist(self) -> None:
+        if self.redis is None:
+            raise RuntimeError(
+                "Redis not connected. Please run connect() function first"
+            )
+
         added = await self.redis.sadd(APPLICATION_METADATA_TOPICS, self.topic)
         if added:
             self.logger.info(f"New topic {self.topic} is created!")
@@ -209,16 +238,24 @@ class Producer(TopicOperator):
     async def _process_message(self, message: Message) -> Message:
         job_id = str(uuid.uuid4())
         message.msg_id = job_id
+
         # Detect partition
         msg_partition = message.get_partition()
         if msg_partition is None:
             if message.partition_key:
-                msg_partition = int(hashlib.md5(
-                    str(message.payload[message.partition_key]).encode()).hexdigest(),
-                                    16) % await self.get_num_partitions()
+                msg_partition = (
+                    int(
+                        hashlib.md5(
+                            str(message.payload[message.partition_key]).encode()
+                        ).hexdigest(),
+                        16,
+                    )
+                    % await self.get_num_partitions()
+                )
             else:
                 msg_partition = (
-                                    self._last_partition_enqueue + 1) % await self.get_num_partitions()
+                    self._last_partition_enqueue + 1
+                ) % await self.get_num_partitions()
 
         if not self._topic_keys.has_partition(msg_partition):
             self._topic_keys.add_partition(msg_partition)
@@ -227,3 +264,8 @@ class Producer(TopicOperator):
         message.enqueued_at = int(time.time())
 
         return message
+
+    def _serialize(self, message: Message) -> Dict[FieldT, EncodableT]:
+        msg_dict = message.to_dict()
+        msg_dict["payload"] = self.serializer(msg_dict["payload"])
+        return cast(Dict[FieldT, EncodableT], msg_dict)

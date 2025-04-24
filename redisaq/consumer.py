@@ -8,7 +8,7 @@ import asyncio
 import logging
 import uuid
 from asyncio import Task
-from typing import Optional, List, Dict, Union, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import aioredis
 import orjson
@@ -17,7 +17,8 @@ from redis import ResponseError
 from redisaq.common import TopicOperator
 from redisaq.constants import APPLICATION_PREFIX
 from redisaq.keys import TopicKeys
-from redisaq.models import BatchCallback, SingleCallback, Message
+from redisaq.models import BatchCallback, Message, SingleCallback
+from redisaq.types import Deserializer, Serializer
 
 
 class Consumer(TopicOperator):
@@ -32,10 +33,10 @@ class Consumer(TopicOperator):
         batch_size: int = 10,
         heartbeat_interval: float = 3.0,
         heartbeat_ttl: float = 12.0,
-        serializer=None,
-        deserializer=None,
-        debug=False,
-        logger=None,
+        serializer: Optional[Serializer] = None,
+        deserializer: Optional[Deserializer] = None,
+        debug: bool = False,
+        logger: Optional[logging.Logger] = None,
     ):
         self.topic = topic
         self.redis_url = redis_url
@@ -48,14 +49,15 @@ class Consumer(TopicOperator):
         self.batch_size = batch_size
         self.callback: Optional[Union[SingleCallback, BatchCallback]] = None
         self.pubsub: Optional[aioredis.client.PubSub] = None
-        self.deserializer = deserializer or orjson
-        self.serializer = serializer or orjson
-        self.logger = logger or logging.getLogger(
-            f"{APPLICATION_PREFIX}.{consumer_name}.{self.consumer_name}")
+        self.deserializer = deserializer or orjson.loads
+        self.serializer = serializer or orjson.dumps
+        self.logger: logging.Logger = logger or logging.getLogger(
+            f"{APPLICATION_PREFIX}.{consumer_name}.{self.consumer_name}"
+        )
         self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
         self._is_consuming = False
         self._topic_keys = TopicKeys(self.topic)
-        self._heartbeat_task: Optional[Task] = None
+        self._heartbeat_task: Optional[Task[Any]] = None
         self._rebalance_event = asyncio.Event()
         self._stopped_event = asyncio.Event()
         self._lock = asyncio.Lock()
@@ -98,7 +100,8 @@ class Consumer(TopicOperator):
         """Register consumer in the group."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         self._heartbeat_task = asyncio.create_task(self.heartbeat())
 
@@ -106,13 +109,15 @@ class Consumer(TopicOperator):
         """Get list of consumers."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         consumers = []
         keys = []
         values = []
         async for key in self.redis.scan_iter(
-            f"{self._topic_keys.consumer_group_keys.consumer_key}:*"):
+            f"{self._topic_keys.consumer_group_keys.consumer_key}:*"
+        ):
             keys.append(key)
             consumer_id = key.split(":")[-1]
             consumers.append(consumer_id)
@@ -120,13 +125,14 @@ class Consumer(TopicOperator):
         if keys:
             values = await self.redis.mget(*keys)
 
-        return {k: self.deserializer.loads(v) for k, v in zip(consumers, values)}
+        return {k: self.deserializer(v) for k, v in zip(consumers, values)}
 
     async def update_partitions(self) -> None:
         """Update assigned partitions for this consumer."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         num_partitions = await self.get_num_partitions()
         consumers = list((await self.get_consumers()).keys())
@@ -136,10 +142,17 @@ class Consumer(TopicOperator):
             return
 
         partitions_per_consumer = max(1, (num_partitions - 1) // consumer_count + 1)
-        consumer_index = consumers.index(
-            self.consumer_name) if self.consumer_name in consumers else 0
+        consumer_index = (
+            consumers.index(self.consumer_name)
+            if self.consumer_name in consumers
+            else 0
+        )
         start = consumer_index * partitions_per_consumer
-        end = start + partitions_per_consumer if consumer_index < consumer_count - 1 else num_partitions
+        end = (
+            start + partitions_per_consumer
+            if consumer_index < consumer_count - 1
+            else num_partitions
+        )
         self.partitions = list(range(start, end))
         self.logger.info(f"Assigned partitions: {self.partitions}")
         self._is_ready = True
@@ -148,7 +161,8 @@ class Consumer(TopicOperator):
         """Signal a rebalance event."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         await self.redis.publish(self._topic_keys.rebalance_channel, "rebalance")
         self.logger.info(f"Fire rebalance signal")
@@ -157,7 +171,8 @@ class Consumer(TopicOperator):
         """Set consumer as not ready before rebalance."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         self._is_ready = False
         await self._do_heartbeat()
@@ -167,7 +182,8 @@ class Consumer(TopicOperator):
         """Check if all consumers are ready."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         all_consumers = await self.get_consumers()
         active_consumers = []
@@ -177,8 +193,9 @@ class Consumer(TopicOperator):
             if is_ready:
                 ready_consumers.append(consumer)
 
-        return set(active_consumers) == set(ready_consumers) and len(
-            active_consumers) > 0
+        return (
+            set(active_consumers) == set(ready_consumers) and len(active_consumers) > 0
+        )
 
     async def wait_for_all_ready(self) -> bool:
         """Wait until all consumers are ready"""
@@ -194,7 +211,8 @@ class Consumer(TopicOperator):
         """Send periodic heartbeat to indicate consumer is alive."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         while self._is_start:
             try:
@@ -224,23 +242,24 @@ class Consumer(TopicOperator):
         self._rebalance_event.set()
         self._stopped_event.set()
 
-    async def _consume(self):
+    async def _consume(self) -> None:
         try:
             pending_messages = await self.get_pending_messages(count=1)
             if len(pending_messages) > 0:
                 for msg_id, pending_message in pending_messages:
                     try:
-                        pending_message['payload'] = self.deserializer.loads(
-                            pending_message['payload'])
-                        message = Message.from_dict(pending_message)
-                        await self.callback(message)
+                        await self.callback(pending_message)  # type: ignore[misc,arg-type]
                     except Exception as e:
-                        self.logger.error(f"Error processing pending message {msg_id}",
-                                          exc_info=e)
+                        self.logger.error(
+                            f"Error processing pending message {msg_id}", exc_info=e
+                        )
                     finally:
                         if pending_message.stream:
-                            await self.redis.xack(pending_message.stream,
-                                                  self.group_name, msg_id)
+                            await self.redis.xack(  # type: ignore[union-attr]
+                                pending_message.stream,
+                                self.group_name,
+                                msg_id,
+                            )
             else:
                 messages = await self._read_messages_from_streams(count=1)
                 if not messages:
@@ -248,21 +267,22 @@ class Consumer(TopicOperator):
                     return
 
                 stream, [(msg_id, msg)] = messages[0]
-                msg['payload'] = self.deserializer.loads(msg['payload'])
+                msg["payload"] = self.deserializer(msg["payload"])
                 message = Message.from_dict(msg)
                 try:
-                    await self.callback(message)
+                    await self.callback(message)  # type: ignore[misc,arg-type]
                 except Exception as e:
                     self.logger.error(f"Error processing message: {msg}", exc_info=e)
                 finally:
-                    await self.redis.xack(stream, self.group_name, msg_id)
+                    await self.redis.xack(stream, self.group_name, msg_id)  # type: ignore[union-attr]
         except Exception as e:
             self.logger.error(f"Error consuming message: {e}", exc_info=e)
         finally:
             pass
 
-    async def consume_batch(self, callback: BatchCallback,
-                            batch_size: int = None) -> None:
+    async def consume_batch(
+        self, callback: BatchCallback, batch_size: Optional[int] = None
+    ) -> None:
         """Consume messages by batch"""
         if self.callback is not None:
             raise ValueError("Consumer is running! Can't consuming!")
@@ -283,26 +303,26 @@ class Consumer(TopicOperator):
         self._rebalance_event.set()
         self._stopped_event.set()
 
-    async def _consume_batch(self):
+    async def _consume_batch(self) -> None:
         try:
             pending_messages = await self.get_pending_messages(count=self.batch_size)
             if len(pending_messages) > 0:
                 try:
-                    messages = []
+                    _messages = []
                     for msg_id, pending_message in pending_messages:
-                        pending_message['payload'] = self.deserializer.loads(
-                            pending_message['payload'])
-                        msg = Message.from_dict(pending_message)
-                        messages.append(msg)
+                        _messages.append(pending_message)
 
-                    await self.callback(messages)
+                    await self.callback(_messages)  # type: ignore[misc,arg-type]
                 except Exception as e:
                     self.logger.error(f"Error processing batch messages", exc_info=e)
                 finally:
                     for msg_id, pending_message in pending_messages:
                         if pending_message.stream:
-                            await self.redis.xack(pending_message.stream,
-                                                  self.group_name, msg_id)
+                            await self.redis.xack(  # type: ignore[union-attr]
+                                pending_message.stream,
+                                self.group_name,
+                                msg_id,
+                            )
             else:
                 result = await self._read_messages_from_streams(count=self.batch_size)
                 if not result:
@@ -311,20 +331,20 @@ class Consumer(TopicOperator):
 
                 all_messages = []
                 for stream, messages in result:
-                    for (msg_id, msg) in messages:
-                        msg['payload'] = self.deserializer.loads(msg['payload'])
+                    for msg_id, msg in messages:
+                        msg["payload"] = self.deserializer(msg["payload"])
                         message = Message.from_dict(msg)
                         message.stream = stream
                         all_messages.append(message)
 
                 try:
-                    await self.callback(all_messages)
+                    await self.callback(all_messages)  # type: ignore[misc,arg-type]
                 except Exception as e:
                     self.logger.error(f"Error processing batch messages", exc_info=e)
                 finally:
                     for stream, messages in result:
-                        for (msg_id, msg) in messages:
-                            await self.redis.xack(stream, self.group_name, msg_id)
+                        for msg_id, msg in messages:
+                            await self.redis.xack(stream, self.group_name, msg_id)  # type: ignore[union-attr]
         except Exception as e:
             self.logger.error(f"Error consuming job: {e}", exc_info=e)
         finally:
@@ -332,7 +352,7 @@ class Consumer(TopicOperator):
 
     async def _create_consumer_group_for_partition(self, partition: int):
         try:
-            await self.redis.xgroup_create(
+            await self.redis.xgroup_create(  # type: ignore[union-attr]
                 self._topic_keys.partition_keys[partition].stream_key,
                 self.group_name,
                 id="0",
@@ -349,17 +369,22 @@ class Consumer(TopicOperator):
         if self._topic_keys.consumer_group_keys is None:
             self._topic_keys.set_consumer_group(self.group_name)
 
-        await self.redis.sadd(self._topic_keys.consumer_group_key, self.group_name)
+        await self.redis.sadd(self._topic_keys.consumer_group_key, self.group_name)  # type: ignore[union-attr]
 
     async def _do_heartbeat(self):
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
-        consumers_key = f"{self._topic_keys.consumer_group_keys.consumer_key}:{self.consumer_name}"
-        await self.redis.set(name=consumers_key,
-                             value=self.serializer.dumps(self._is_ready),
-                             ex=int(self.heartbeat_ttl))
+        consumers_key = (
+            f"{self._topic_keys.consumer_group_keys.consumer_key}:{self.consumer_name}"
+        )
+        await self.redis.set(
+            name=consumers_key,
+            value=self.serializer(self._is_ready),
+            ex=int(self.heartbeat_ttl),
+        )
 
     async def _detect_changes(self):
         # Check for rebalance signal via pubsub
@@ -367,8 +392,11 @@ class Consumer(TopicOperator):
             # detect rebalance via pub/sub
             if self.pubsub:
                 message = await self.pubsub.get_message(timeout=0.01)
-                if message and message["type"] == "message" and message[
-                    "data"] == "rebalance":
+                if (
+                    message
+                    and message["type"] == "message"
+                    and message["data"] == "rebalance"
+                ):
                     self.logger.info("New consumer joined!")
                     self._rebalance_event.set()
 
@@ -377,7 +405,8 @@ class Consumer(TopicOperator):
             if len(consumers) != self._consumer_count:
                 if self._consumer_count != -1:
                     self.logger.info(
-                        f"Consumer count change {self._consumer_count} -> {len(consumers)}")
+                        f"Consumer count change {self._consumer_count} -> {len(consumers)}"
+                    )
                     self._rebalance_event.set()
                 self._consumer_count = len(consumers)
 
@@ -386,7 +415,8 @@ class Consumer(TopicOperator):
             if partition_count != self._partition_count:
                 if self._partition_count != -1:
                     self.logger.info(
-                        f"Partition count change {self._partition_count} -> {partition_count}")
+                        f"Partition count change {self._partition_count} -> {partition_count}"
+                    )
                     self._rebalance_event.set()
                 self._partition_count = partition_count
 
@@ -418,12 +448,13 @@ class Consumer(TopicOperator):
         self._rebalance_event.set()
         await self._stopped_event.wait()
 
-    async def _prepare_for_consume(self):
+    async def _prepare_for_consume(self) -> None:
         await self.connect()
 
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         # Register consumer
         await self.register_consumer()
@@ -432,14 +463,15 @@ class Consumer(TopicOperator):
         self.logger.info(f"Preparing for consuming...")
         await self.signal_rebalance()
 
-    async def get_pending_messages(self, count: int) -> List[Message]:
+    async def get_pending_messages(self, count: int) -> List[Tuple[str, Message]]:
         return []
 
-    async def _do_consume(self, is_batch: bool):
+    async def _do_consume(self, is_batch: bool) -> None:
         """Consume jobs from assigned partitions."""
         if self.redis is None:
             raise RuntimeError(
-                "Redis is not connected! Please run connect() function first!")
+                "Redis is not connected! Please run connect() function first!"
+            )
 
         last_is_consuming = self._is_consuming
         while self._is_start:
@@ -463,16 +495,22 @@ class Consumer(TopicOperator):
 
         self.logger.info("Stopped consuming!")
 
-    async def _read_messages_from_streams(self, count: int) -> List[Tuple[str, List[Tuple[str, Dict]]]]:
-        self.last_read_partition_index = (self.last_read_partition_index + 1) % len(self.partitions)
-        self.logger.debug(f"Read message from stream {self._topic_keys.partition_keys[self.last_read_partition_index].stream_key}")
-        stream = self._topic_keys.partition_keys[self.last_read_partition_index].stream_key
-        return await self.redis.xreadgroup(
+    async def _read_messages_from_streams(
+        self, count: int
+    ) -> List[Tuple[str, List[Tuple[str, Dict[str, Any]]]]]:
+        self.last_read_partition_index = (self.last_read_partition_index + 1) % len(
+            self.partitions
+        )
+        self.logger.debug(
+            f"Read message from stream {self._topic_keys.partition_keys[self.last_read_partition_index].stream_key}"
+        )
+        stream = self._topic_keys.partition_keys[
+            self.last_read_partition_index
+        ].stream_key
+        return await self.redis.xreadgroup(  # type: ignore[union-attr,no-any-return]
             groupname=self.group_name,
             consumername=self.consumer_name,
-            streams={
-                stream: ">"
-            },
+            streams={stream: ">"},
             count=count,
-            block=1000
+            block=1000,
         )

@@ -44,8 +44,11 @@ from redisaq import Producer
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def main():
-    producer = Producer(topic="send_email", redis_url="redis://localhost:6379/0", maxlen=10000)
+    producer = Producer(
+        topic="send_email", redis_url="redis://localhost:6379/0", maxlen=10000
+    )
     await producer.connect()
     job_count = 0
     max_speed = 0
@@ -58,7 +61,7 @@ async def main():
                 {
                     "to": f"user{i}@example.com",
                     "subject": f"Email {i}",
-                    "body": f"Content of email {i}"
+                    "body": f"Content of email {i}",
                 }
                 for i in range(job_count + 1, job_count + batch_size + 1)
             ]
@@ -75,7 +78,7 @@ async def main():
                 logger.info(f"Increased partitions to {new_partitions}")
 
             if job_count % 20 == 0:
-                speed = round(job_count/(time.time() - start_time) * 100) / 100
+                speed = round(job_count / (time.time() - start_time) * 100) / 100
                 max_speed = max(max_speed, speed)
                 logger.info(f"Speed: {speed} msgs/s {job_count}")
 
@@ -89,6 +92,7 @@ async def main():
     finally:
         await producer.close()
         logger.info(f"Max speed: {max_speed}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

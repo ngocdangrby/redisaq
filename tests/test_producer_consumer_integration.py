@@ -5,6 +5,7 @@ import uuid
 from typing import List
 
 import pytest
+
 from redisaq.consumer import Consumer
 from redisaq.models import Message
 from redisaq.producer import Producer
@@ -44,8 +45,9 @@ class TestProducerConsumerIntegration:
         self.received_messages.extend([message])
         self.logger.info(f"Received 1 message")
 
-    async def test_producer_consumer_single_message(self, redis_client,
-                                                    mock_aioredis_from_url):
+    async def test_producer_consumer_single_message(
+        self, redis_client, mock_aioredis_from_url
+    ):
         """Test that a single message sent by producer is received by consumer."""
         # Initialize Producer
         self.producer = Producer(
@@ -53,7 +55,7 @@ class TestProducerConsumerIntegration:
             redis_url="redis://localhost:6379/0",  # URL is mocked
             init_partitions=2,
             debug=True,
-            logger=self.logger
+            logger=self.logger,
         )
         await self.producer.connect()
 
@@ -65,7 +67,7 @@ class TestProducerConsumerIntegration:
             consumer_name=self.consumer_name,
             batch_size=10,
             debug=True,
-            logger=self.logger
+            logger=self.logger,
         )
         await self.consumer.connect()
 
@@ -108,7 +110,9 @@ class TestProducerConsumerIntegration:
         assert received_message.enqueued_at is not None
 
     async def test_producer_consumer_batch_messages(
-        self, redis_client, mock_aioredis_from_url,
+        self,
+        redis_client,
+        mock_aioredis_from_url,
     ):
         """Test that multiple messages sent by producer are received by consumer."""
         self.max_size = 0
@@ -119,7 +123,7 @@ class TestProducerConsumerIntegration:
             redis_url="redis://localhost:6379/0",  # URL is mocked
             init_partitions=2,
             debug=True,
-            logger=self.logger
+            logger=self.logger,
         )
         await self.producer.connect()
 
@@ -131,16 +135,15 @@ class TestProducerConsumerIntegration:
             consumer_name=self.consumer_name,
             batch_size=10,
             debug=True,
-            logger=self.logger
+            logger=self.logger,
         )
         await self.consumer.connect()
 
         # Enqueue multiple messages
-        payloads = [
-            {"data": f"test_message_{i}", "id": i} for i in range(5)
-        ]
-        msg_ids = await self.producer.batch_enqueue(payloads=payloads,
-                                                    partition_key="id")
+        payloads = [{"data": f"test_message_{i}", "id": i} for i in range(5)]
+        msg_ids = await self.producer.batch_enqueue(
+            payloads=payloads, partition_key="id"
+        )
 
         # Start consumer in the background
         consumer_task = asyncio.create_task(
@@ -166,8 +169,9 @@ class TestProducerConsumerIntegration:
             assert msg.partition in [0, 1]
             assert msg.enqueued_at is not None
 
-    async def test_producer_consumer_partition_distribution(self, redis_client,
-                                                            mock_aioredis_from_url):
+    async def test_producer_consumer_partition_distribution(
+        self, redis_client, mock_aioredis_from_url
+    ):
         """Test that messages are distributed across partitions correctly."""
         # Initialize Producer
         self.producer = Producer(
@@ -175,7 +179,7 @@ class TestProducerConsumerIntegration:
             redis_url="redis://localhost:6379/0",  # URL is mocked
             init_partitions=2,
             debug=True,
-            logger=self.logger
+            logger=self.logger,
         )
         await self.producer.connect()
 
@@ -187,16 +191,15 @@ class TestProducerConsumerIntegration:
             consumer_name=self.consumer_name,
             batch_size=10,
             debug=True,
-            logger=self.logger
+            logger=self.logger,
         )
         await self.consumer.connect()
 
         # Enqueue messages with different partition keys
-        payloads = [
-            {"data": f"test_message_{i}", "id": i} for i in range(10)
-        ]
-        msg_ids = await self.producer.batch_enqueue(payloads=payloads,
-                                                    partition_key="id")
+        payloads = [{"data": f"test_message_{i}", "id": i} for i in range(10)]
+        msg_ids = await self.producer.batch_enqueue(
+            payloads=payloads, partition_key="id"
+        )
 
         # Start consumer in the background
         consumer_task = asyncio.create_task(
@@ -221,7 +224,9 @@ class TestProducerConsumerIntegration:
 
         # Verify partition distribution
         partitions = [msg.partition for msg in self.received_messages]
-        assert len(set(partitions)) > 1, "Messages should be distributed across multiple partitions"
+        assert (
+            len(set(partitions)) > 1
+        ), "Messages should be distributed across multiple partitions"
         assert all(p in [0, 1] for p in partitions), "Partitions should be 0 or 1"
         assert len(self.received_messages) == len(payloads)
         received_msg_ids = [msg.msg_id for msg in self.received_messages]
