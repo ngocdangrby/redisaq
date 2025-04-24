@@ -84,12 +84,16 @@ class Consumer(TopicOperator):
             await self._create_consumer_group_for_partition(partition)
 
         self.pubsub = self.redis.pubsub()
-        await self.pubsub.subscribe(self._topic_keys.rebalance_channel)
+        await self.pubsub.subscribe(
+            self._topic_keys.consumer_group_keys.rebalance_channel
+        )
 
     async def close(self) -> None:
         """Close Redis connection and pubsub."""
         if self.pubsub:
-            await self.pubsub.unsubscribe(self._topic_keys.rebalance_channel)
+            await self.pubsub.unsubscribe(
+                self._topic_keys.consumer_group_keys.rebalance_channel
+            )
             await self.pubsub.close()
             self.pubsub = None
         if self.redis:
@@ -164,7 +168,9 @@ class Consumer(TopicOperator):
                 "Redis is not connected! Please run connect() function first!"
             )
 
-        await self.redis.publish(self._topic_keys.rebalance_channel, "rebalance")
+        await self.redis.publish(
+            self._topic_keys.consumer_group_keys.rebalance_channel, "rebalance"
+        )
         self.logger.info(f"Fire rebalance signal")
 
     async def remove_ready(self) -> None:
@@ -366,7 +372,10 @@ class Consumer(TopicOperator):
                 raise
 
     async def _create_consumer_group_for_topic(self):
-        if self._topic_keys.consumer_group_keys is None:
+        if (
+            self._topic_keys.consumer_group_keys is None
+            or self._topic_keys.consumer_group_keys.group_name != self.group_name
+        ):
             self._topic_keys.set_consumer_group(self.group_name)
 
         await self.redis.sadd(self._topic_keys.consumer_group_key, self.group_name)  # type: ignore[union-attr]
@@ -424,9 +433,12 @@ class Consumer(TopicOperator):
 
     async def _wait_for_rebalance(self):
         while self._is_start:
-            await self._rebalance_event.wait()
-            await self._do_rebalance()
-            self._rebalance_event.clear()
+            try:
+                await asyncio.wait_for(self._rebalance_event.wait(), timeout=0.5)
+                await self._do_rebalance()
+                self._rebalance_event.clear()
+            except asyncio.TimeoutError:
+                pass
 
     async def _do_rebalance(self):
         self.logger.info(f"Pausing for rebalance")

@@ -11,6 +11,10 @@ from redisaq.utils import (
 
 class TopicConsumerGroupKeys:
     def __init__(self, topic: str, consumer_group: str):
+        self.group_name = consumer_group
+        self.rebalance_channel = get_redis_key_for_topic_rebalance_channel(
+            topic=topic, consumer_group=consumer_group
+        )
         self.consumer_key = get_redis_key_for_topic_consumer_group_consumer(
             topic=topic, consumer_group=consumer_group
         )
@@ -27,7 +31,6 @@ class TopicKeys:
     def __init__(self, topic: str):
         self.topic = topic
         self.partition_key = get_redis_key_for_topic_partition(topic)
-        self.rebalance_channel = get_redis_key_for_topic_rebalance_channel(topic)
         self.consumer_group_key = get_redis_key_for_topic_consumer_group(topic)
         self.partition_keys: Dict[int, TopicPartitionKeys] = {}
         self.consumer_group_keys = TopicConsumerGroupKeys(self.topic, "default")

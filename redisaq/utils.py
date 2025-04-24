@@ -20,8 +20,8 @@ def get_redis_key_for_topic_consumer_group(topic: str) -> str:
     return f"{APPLICATION_PREFIX}:{CONSUMER_GROUP_KEY}:{topic}"
 
 
-def get_redis_key_for_topic_rebalance_channel(topic: str) -> str:
-    return f"{APPLICATION_PREFIX}:{REBALANCE_CHANNEL_KEY}:{topic}"
+def get_redis_key_for_topic_rebalance_channel(topic: str, consumer_group: str) -> str:
+    return f"{APPLICATION_PREFIX}:{REBALANCE_CHANNEL_KEY}:{topic}:{consumer_group}"
 
 
 def get_redis_key_for_topic_consumer_group_consumer(

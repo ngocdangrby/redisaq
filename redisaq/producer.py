@@ -35,7 +35,7 @@ class Producer(TopicOperator):
         init_partitions: int = 1,
         maxlen: Optional[int] = None,
         approximate: bool = True,
-        serializer: Optional[Serializer] = None,
+        serializer: Optional["Serializer"] = None,
         debug: bool = False,
         logger: Optional[logging.Logger] = None,
     ):
@@ -265,7 +265,7 @@ class Producer(TopicOperator):
 
         return message
 
-    def _serialize(self, message: Message) -> Dict[FieldT, EncodableT]:
+    def _serialize(self, message: Message) -> Dict["FieldT", "EncodableT"]:
         msg_dict = message.to_dict()
         msg_dict["payload"] = self.serializer(msg_dict["payload"])
-        return cast(Dict[FieldT, EncodableT], msg_dict)
+        return cast(Dict["FieldT", "EncodableT"], msg_dict)

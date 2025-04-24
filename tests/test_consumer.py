@@ -28,7 +28,9 @@ async def consumer(redis_client):
     # Assign redis_client to consumer
     consumer.redis = redis_client
     consumer.pubsub = redis_client.pubsub()
-    await consumer.pubsub.subscribe(consumer._topic_keys.rebalance_channel)
+    await consumer.pubsub.subscribe(
+        consumer._topic_keys.consumer_group_keys.rebalance_channel
+    )
     yield consumer
     await consumer.close()
 

@@ -1,49 +1,122 @@
 # Basic Example for redisaq
 
-This directory contains a basic example demonstrating the `redisaq` library's capabilities, including batch job production and consumption, consumer groups, reconsumption, partition rebalancing, heartbeats, and crash detection.
+This directory contains a comprehensive example demonstrating the core capabilities of the `redisaq` library, including message production, consumption, consumer groups, partition management, and fault tolerance features.
 
 ## Installation
-Install `redisaq` from PyPI:
 
 ```bash
 pip install redisaq
 ```
 
-## Overview
+## Example Components
 
-The example simulates an email-sending system:
-- **`producer.py`**: Enqueues batches of 2-5 jobs to the `send_email` topic every 0.5-2 seconds, with payloads like `{"to": "userN@example.com", "subject": "..."}`. It increases partitions (1 to 8) every 5 jobs and limits streams to approximately 1000 messages using `XADD` with `maxlen=1000`.
-- **`consumer1.py`, `consumer2.py`, `consumer3.py`**: Consumers in the `email_group` consumer group, processing jobs from assigned partitions of `send_email`. They use heartbeats (TTL 10s, interval 5s) for coordination, pause/rebalance/resume when new consumers join, and acknowledge jobs with `XACK`.
-- **`consumer_new_group.py`**: A consumer in a new group (`email_group_v2`) to demonstrate reconsumption of all jobs from the streams, independent of `email_group`.
+### Producer (`producer.py`)
+- Simulates an email notification system
+- Features:
+  - Batch message production (2-5 messages per batch)
+  - Dynamic partition scaling (1 to 8 partitions)
+  - Stream length management (max 10,000 messages)
+  - Configurable message routing
+
+### Multiple Consumers
+- **Primary Consumers** (`consumer1.py`, `consumer2.py`, `consumer3.py`):
+  - Part of `email_group` consumer group
+  - Automatic partition assignment
+  - Heartbeat-based health monitoring
+  - Graceful rebalancing on consumer changes
+
+- **Reprocessing Consumer** (`consumer_new_group.py`):
+  - Demonstrates message reconsumption
+  - Uses separate consumer group (`email_group_v2`)
+  - Processes all messages independently
+
+## Implementation Details
+
+### Message Flow
+1. **Production**:
+   ```python
+   # Producer sends email notifications
+   messages = [
+       {"to": "user1@example.com", "subject": "Welcome"},
+       {"to": "user2@example.com", "subject": "Updates"}
+   ]
+   await producer.batch_enqueue(messages)
+   ```
+
+2. **Consumption**:
+   ```python
+   # Consumer processes messages
+   async def process_message(message):
+       print(f"Sending email to: {message.payload['to']}")
+       await asyncio.sleep(1)  # Simulate email sending
+
+   await consumer.process(process_message)
+   ```
 
 ### Key Features
-- **Batch Production**: Producer supports `batch_enqueue` to add multiple jobs efficiently in a single operation, distributing them across partitions.
-- **Consumer Groups**: Consumers read jobs via `XREADGROUP` and acknowledge with `XACK`, enabling reconsumption by creating a new group.
-- **Reconsumption**: Jobs remain in streams (limited by `maxlen=1000`), allowing a new group (e.g., `email_group_v2`) to reprocess all jobs from the consume.
-- **Partition Rebalancing**: Consumers self-assign partitions (round-robin) and rebalance when new consumers join or crash, with pause/resume to avoid conflicts.
-- **Heartbeats**: Each consumer maintains a heartbeat key (`redisaq:worker:send_email:email_group:<consumer_id>`, TTL 10s, updated every 5s) for crash detection.
-- **Crash Detection**: If a consumer's heartbeat expires after 10s, others rebalance to take over its partitions.
-- **Dead-Letter Queue**: Failed jobs are sent to `redisaq:dead_letter` and acknowledged to avoid reprocessing in the same group.
-- **Stream Limiting**: Producer limits streams to ~1000 messages to manage memory, configurable via `maxlen`.
-- **Async Processing**: Consumer `process_job` function is asynchronous, allowing non-blocking job handling.
+
+#### 1. Partition Management
+- Dynamic partition scaling
+- Automatic partition assignment
+- Round-robin load balancing
+
+#### 2. Fault Tolerance
+- Heartbeat monitoring (5s interval)
+- Automatic crash detection
+- Graceful rebalancing
+- Dead-letter queue for failed messages
+
+#### 3. Message Processing
+- Batch operations support
+- Asynchronous processing
+- Message acknowledgment
+- Stream size management
 
 **Warning**: Setting `maxlen=None` (unbounded streams) can lead to significant memory usage in Redis. The example uses `maxlen=1000` to limit streams, but be cautious with unbounded streams in production.
 
-## Prerequisites
-- Python 3.8+
-- Redis running at `redis://localhost:6379`
-- Docker (optional, for running Redis via `docker-compose`)
+## Running the Example
 
-## Setup
-1. **Start Redis**:
-   Use Docker:
-   ```bash
-   docker-compose up -d
-   ```
-   Or run Redis locally:
-   ```bash
-   redis-server
-   ```
+### Prerequisites
+- Python 3.8+
+- Redis server
+- Docker (optional)
+
+### 1. Start Redis
+Using Docker:
+```bash
+docker-compose up -d redis
+```
+Or locally:
+```bash
+redis-server
+```
+
+### 2. Run Components
+
+1. Start the producer:
+```bash
+python producer.py
+```
+
+2. Start multiple consumers (in separate terminals):
+```bash
+python consumer1.py  # Primary consumer
+python consumer2.py  # Additional consumer
+python consumer_new_group.py  # Reprocessing consumer
+```
+
+### 3. Monitor Output
+- Watch the producer logs for message production
+- Observe consumer logs for processing and rebalancing
+- Check Redis streams using redis-cli:
+  ```bash
+  redis-cli xinfo stream redisaq:send_email:0
+  ```
+
+### 4. Cleanup
+```bash
+docker-compose down  # If using Docker
+```
 
 ## Running the Example
 1. **Start Consumers** (in separate terminals):

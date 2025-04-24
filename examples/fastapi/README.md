@@ -1,54 +1,250 @@
 # FastAPI Integration Example for redisaq
 
-This example demonstrates how to integrate `redisaq` with a FastAPI application to enqueue and process jobs asynchronously using Redis Streams, with the consumer running in a separate process.
-
-## Installation
-Install `redisaq` from PyPI:
-
-```bash
-pip install redisaq
-```
-
-Install FastAPI and Uvicorn:
-
-```bash
-pip install fastapi uvicorn
-```
+This example demonstrates how to build a scalable email processing system using FastAPI and redisaq. It showcases advanced features like batch processing, priority-based routing, and robust error handling.
 
 ## Overview
-The example simulates an email-sending API:
-- **`main.py`**: A FastAPI app with:
-  - **POST /jobs**: Enqueues a batch of email jobs to the `send_email` topic, with payloads like `{"to": "user1@example.com", "subject": "..."}`.
-  - **GET /status**: Checks Redis connection status.
-- **`consumer.py`**: A separate script running a `Consumer` for the `send_email` topic in group `email_group`. It processes jobs asynchronously, uses heartbeats (TTL 10s, interval 5s), and acknowledges jobs with `XACK`. The `process_job` function is asynchronous for non-blocking processing.
-- Jobs are limited to ~1000 messages per stream (`maxlen=1000` via `XADD`).
+
+The example implements an email processing system with two components:
+
+### 1. API Server (`main.py`)
+- **Endpoints**:
+  - `POST /jobs`: Submit email jobs with priority
+  - `GET /status`: Check system health and partitions
+- **Features**:
+  - Email validation with Pydantic
+  - Priority-based message routing
+  - Batch job submission
+  - Comprehensive error handling
+  - Health monitoring
+
+### 2. Message Processor (`consumer.py`)
+- **Processing**:
+  - Concurrent batch processing
+  - Priority-based handling
+  - Simulated email sending
+- **Features**:
+  - Automatic partition assignment
+  - Heartbeat monitoring
+  - Graceful shutdown
+  - Dead-letter queue for failed jobs
+  - Detailed logging
+
+## Installation
+
+```bash
+# Install dependencies
+pip install redisaq fastapi uvicorn pydantic[email]
+
+# Optional: Install development tools
+pip install uvicorn[standard] httpx pytest
+```
+
+## Implementation Details
+
+### API Layer (`main.py`)
+
+```python
+from fastapi import FastAPI
+from pydantic import BaseModel, EmailStr
+from redisaq import Producer
+
+class EmailJob(BaseModel):
+    to: EmailStr
+    subject: str
+    body: str
+    priority: int = 1
+
+class JobBatchRequest(BaseModel):
+    jobs: List[EmailJob]
+
+app = FastAPI()
+producer = Producer(
+    topic="send_email",
+    maxlen=10000,
+    init_partitions=2
+)
+
+@app.post("/jobs")
+async def enqueue_jobs(request: JobBatchRequest):
+    payloads = [
+        {**job.model_dump(), "enqueued_at": None}
+        for job in request.jobs
+    ]
+    job_ids = await producer.batch_enqueue(
+        payloads,
+        partition_key="priority"
+    )
+    return {"job_ids": job_ids}
+```
+
+### Processing Layer (`consumer.py`)
+
+```python
+from redisaq import Consumer, Message
+
+async def process_batch(messages: List[Message]):
+    logger.info(f"Processing batch of {len(messages)} messages")
+    tasks = [process_message(msg) for msg in messages]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+consumer = Consumer(
+    topic="send_email",
+    group_name="email_processors",
+    batch_size=5,
+    heartbeat_interval=3.0
+)
+
+await consumer.connect()
+await consumer.process_batch(process_batch)
+```
 
 ### Key Features
-- **Batch Job Submission**: Submit multiple jobs via a single API call using `batch_enqueue`.
-- **Separate Consumer Process**: Consumer runs independently, allowing scaling and isolation from the FastAPI app.
-- **Consumer Status**: Monitor Redis connectivity via API; consumer status checked via logs or Redis.
-- **Stream Limiting**: Streams are capped at ~1000 messages to manage Redis memory.
-- **Consumer Groups**: Supports reconsumption by creating a new group (not shown in this example).
-- **Heartbeats**: Consumer maintains a heartbeat (`redisaq:worker:send_email:email_group:api_consumer`, TTL 10s, updated every 5s).
-- **Dead-Letter Queue**: Failed jobs go to `redisaq:dead_letter`.
-- **Async Processing**: Consumer `process_job` function is asynchronous, allowing non-blocking job handling.
 
-**Warning**: Setting `maxlen=None` (unbounded streams) can lead to significant memory usage in Redis. This example uses `maxlen=1000`, but be cautious in production.
+#### 1. Message Routing
+- Priority-based partition routing
+- Configurable batch sizes
+- Multiple consumer support
 
-## Prerequisites
-- Python 3.8+
-- Redis running at `redis://localhost:6379`
-- Docker (optional, for running Redis via `docker-compose`)
+#### 2. Processing
+- Concurrent batch processing
+- Priority-based handling
+- Automatic acknowledgment
+- Error handling with retries
 
-## Setup
-1. **Start Redis**:
-   Use Docker:
-   ```bash
-   docker-compose up -d
-   ```
-   Or run Redis locally:
-   ```bash
-   redis-server
+#### 3. Monitoring
+- Health check endpoint
+- Partition information
+- Detailed logging
+- Consumer heartbeats
+
+## Usage Guide
+
+### 1. Start Redis
+```bash
+# Using Docker
+docker-compose up -d redis
+
+# Or local Redis server
+redis-server
+```
+
+### 2. Launch Services
+
+1. Start API server:
+```bash
+# Development mode with auto-reload
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+2. Start consumer:
+```bash
+python consumer.py
+```
+
+### 3. Send Test Jobs
+
+1. Single job:
+```bash
+curl -X POST http://localhost:8000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobs": [{
+      "to": "user@example.com",
+      "subject": "Welcome",
+      "body": "Hello!",
+      "priority": 1
+    }]
+  }'
+```
+
+2. Batch of jobs:
+```bash
+curl -X POST http://localhost:8000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobs": [
+      {
+        "to": "user1@example.com",
+        "subject": "High Priority",
+        "body": "Urgent message",
+        "priority": 2
+      },
+      {
+        "to": "user2@example.com",
+        "subject": "Normal Priority",
+        "body": "Regular update",
+        "priority": 1
+      }
+    ]
+  }'
+```
+
+### 4. Monitor System
+
+1. Check API health:
+```bash
+curl http://localhost:8000/status
+```
+
+2. Monitor Redis streams:
+```bash
+# Check stream info
+redis-cli xinfo stream redisaq:send_email:0
+
+# View consumer groups
+redis-cli xinfo groups redisaq:send_email:0
+
+# Check pending messages
+redis-cli xpending redisaq:send_email:0 email_processors
+```
+
+3. View logs:
+```bash
+# API logs
+tail -f api.log
+
+# Consumer logs
+tail -f consumer.log
+```
+
+### 5. Cleanup
+```bash
+# Stop services
+kill $(pgrep -f "uvicorn main:app")
+kill $(pgrep -f "python consumer.py")
+
+# Stop Redis
+docker-compose down
+```
+
+## Error Handling
+
+### API Errors
+- Invalid email format: 422 Unprocessable Entity
+- Redis connection issues: 500 Internal Server Error
+- Invalid request format: 400 Bad Request
+
+### Consumer Errors
+- Failed jobs go to dead-letter queue
+- Automatic retry for transient failures
+- Detailed error logging
+
+## Production Considerations
+
+1. **Configuration**
+   - Adjust `maxlen` based on memory requirements
+   - Configure appropriate batch sizes
+   - Set proper heartbeat intervals
+
+2. **Scaling**
+   - Run multiple consumers
+   - Increase partition count for better distribution
+   - Monitor Redis memory usage
+
+3. **Monitoring**
+   - Implement proper logging
+   - Set up alerts for failed jobs
+   - Monitor consumer health
    ```
 
 ## Running the Example
