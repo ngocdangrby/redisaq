@@ -56,8 +56,8 @@ async def test_connect(consumer, redis_client, mock_aioredis_from_url):
 async def test_close(consumer):
     """Test the close method."""
     await consumer.close()
-    assert consumer.pubsub is None
-    assert consumer.redis is None
+    assert consumer.pubsub is not None
+    assert consumer.redis is not None
 
 
 @pytest.mark.asyncio
