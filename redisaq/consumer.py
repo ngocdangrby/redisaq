@@ -11,7 +11,6 @@ from asyncio import Task
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
 
 import orjson
-from redis import ResponseError
 from redis import asyncio as aioredis
 
 from redisaq.common import TopicOperator
@@ -253,7 +252,9 @@ class Consumer(TopicOperator):
 
     async def _consume(self, is_batch: bool) -> None:
         try:
-            result = await self._read_messages_from_streams(count=self.batch_size)
+            result = await self._read_messages_from_streams(
+                count=self.batch_size if is_batch else 1
+            )
             if not result:
                 await asyncio.sleep(0.1)
                 return
@@ -314,9 +315,6 @@ class Consumer(TopicOperator):
                 mkstream=True,
             )
         except aioredis.ResponseError as e:
-            if "BUSYGROUP" not in str(e):
-                raise
-        except ResponseError as e:
             if "BUSYGROUP" not in str(e):
                 raise
 
