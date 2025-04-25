@@ -68,7 +68,7 @@ async def main():
             job_id = await producer.enqueue(payloads[0])
             logger.info(f"Enqueued single job: {job_id}")
 
-            job_ids = await producer.batch_enqueue(payloads)
+            job_ids = await producer.batch_enqueue(payloads[1:])
             logger.info(f"Enqueued batch of {len(job_ids)} messages: {job_ids}")
             job_count += batch_size
 

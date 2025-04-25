@@ -22,6 +22,7 @@ async def main():
         group_name="email_group_v2",
         consumer_name="consumer_1",
         redis_url="redis://localhost:6379/0",
+        debug=True,
     )
     try:
         await consumer.consume(callback=process_job)

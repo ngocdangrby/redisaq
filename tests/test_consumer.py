@@ -313,6 +313,9 @@ async def test_read_single_message(consumer, mock_aioredis_from_url):
     assert isinstance(message["payload"], str)
     assert consumer.deserializer(message["payload"])["id"] == 2
     assert consumer.deserializer(message["payload"])["data"] == "2"
+    for stream, messages in message_streams:
+        for msg_id, msg in messages:
+            await consumer.redis.xack(stream, consumer.group_name, msg_id)  # type: ignore[union-attr]
 
     # first message from stream with partition = 1
     message_streams = await consumer._read_messages_from_streams(count=1)
@@ -327,6 +330,9 @@ async def test_read_single_message(consumer, mock_aioredis_from_url):
     assert isinstance(message["payload"], str)
     assert consumer.deserializer(message["payload"])["id"] == 1
     assert consumer.deserializer(message["payload"])["data"] == "1"
+    for stream, messages in message_streams:
+        for msg_id, msg in messages:
+            await consumer.redis.xack(stream, consumer.group_name, msg_id)  # type: ignore[union-attr]
 
     # second message from stream with partition = 0
     message_streams = await consumer._read_messages_from_streams(count=1)
@@ -341,6 +347,9 @@ async def test_read_single_message(consumer, mock_aioredis_from_url):
     assert isinstance(message["payload"], str)
     assert consumer.deserializer(message["payload"])["id"] == 2
     assert consumer.deserializer(message["payload"])["data"] == "22"
+    for stream, messages in message_streams:
+        for msg_id, msg in messages:
+            await consumer.redis.xack(stream, consumer.group_name, msg_id)  # type: ignore[union-attr]
 
     # second message from stream with partition = 1
     message_streams = await consumer._read_messages_from_streams(count=1)
@@ -355,6 +364,9 @@ async def test_read_single_message(consumer, mock_aioredis_from_url):
     assert isinstance(message["payload"], str)
     assert consumer.deserializer(message["payload"])["id"] == 1
     assert consumer.deserializer(message["payload"])["data"] == "11"
+    for stream, messages in message_streams:
+        for msg_id, msg in messages:
+            await consumer.redis.xack(stream, consumer.group_name, msg_id)  # type: ignore[union-attr]
 
 
 async def test_read_batch_messages(consumer, mock_aioredis_from_url):
@@ -398,6 +410,10 @@ async def test_read_batch_messages(consumer, mock_aioredis_from_url):
         assert isinstance(message["payload"], str)
         assert consumer.deserializer(message["payload"])["id"] == 2
 
+    for stream, messages in message_streams:
+        for msg_id, msg in messages:
+            await consumer.redis.xack(stream, consumer.group_name, msg_id)  # type: ignore[union-attr]
+
     # messages from stream with partition = 1
     message_streams = await consumer._read_messages_from_streams(count=2)
     assert consumer.last_read_partition_index == 1
@@ -411,6 +427,10 @@ async def test_read_batch_messages(consumer, mock_aioredis_from_url):
         assert isinstance(message["payload"], str)
         assert consumer.deserializer(message["payload"])["id"] == 1
 
+    for stream, messages in message_streams:
+        for msg_id, msg in messages:
+            await consumer.redis.xack(stream, consumer.group_name, msg_id)  # type: ignore[union-attr]
+
     # messages from stream with partition = 0
     message_streams = await consumer._read_messages_from_streams(count=2)
     assert consumer.last_read_partition_index == 0
@@ -422,6 +442,63 @@ async def test_read_batch_messages(consumer, mock_aioredis_from_url):
     assert consumer.last_read_partition_index == 1
     assert message_streams is not None
     assert len(message_streams) == 0
+
+
+@pytest.mark.asyncio
+async def test_read_pending_message(consumer, mock_aioredis_from_url):
+    """Test read pending message method."""
+
+    producer = Producer(
+        topic=consumer.topic,
+        redis_url="redis://localhost:6379/1",  # URL is mocked
+        init_partitions=1,
+    )
+    await producer.connect()
+
+    async def callback(message):
+        pass
+
+    async def get_num_partitions():
+        return 2
+
+    consumer._is_start = True
+    consumer.get_num_partitions = get_num_partitions
+    await consumer.connect()
+    consumers_key = f"{consumer._topic_keys.consumer_group_keys.consumer_key}:{consumer.consumer_name}"
+    await consumer.redis.set(consumers_key, consumer.serializer(True))
+    consumer.partitions = [0]
+    await producer.enqueue({"data": "1", "id": 1}, partition_key="id")
+    await producer.enqueue({"data": "11", "id": 1}, partition_key="id")
+    await producer.enqueue({"data": "2", "id": 2}, partition_key="id")
+    await producer.enqueue({"data": "22", "id": 2}, partition_key="id")
+
+    # first message from stream with partition = 0
+    message_streams = await consumer._read_messages_from_streams(count=1)
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[0].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 1
+    _, message = messages[0]
+    assert isinstance(message["payload"], str)
+    assert consumer.deserializer(message["payload"])["id"] == 1
+    assert consumer.deserializer(message["payload"])["data"] == "1"
+
+    await asyncio.sleep(5)
+
+    # read pending message from stream with partition = 0
+    message_streams = await consumer._read_messages_from_streams(count=1)
+    assert message_streams is not None
+    assert len(message_streams) == 1
+    message_stream = message_streams[0]
+    assert message_stream[0] == consumer._topic_keys.partition_keys[0].stream_key
+    messages = message_stream[1]
+    assert len(messages) == 1
+    _, message = messages[0]
+    assert isinstance(message["payload"], str)
+    assert consumer.deserializer(message["payload"])["id"] == 1
+    assert consumer.deserializer(message["payload"])["data"] == "1"
 
 
 @pytest.mark.asyncio

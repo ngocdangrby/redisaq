@@ -8,7 +8,7 @@ import asyncio
 import logging
 import uuid
 from asyncio import Task
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
 
 import aioredis
 import orjson
@@ -18,7 +18,11 @@ from redisaq.common import TopicOperator
 from redisaq.constants import APPLICATION_PREFIX
 from redisaq.keys import TopicKeys
 from redisaq.models import BatchCallback, Message, SingleCallback
-from redisaq.types import Deserializer, Serializer
+
+if TYPE_CHECKING:
+    from redis.typing import EncodableT, FieldT
+
+    from redisaq.types import Deserializer, Serializer
 
 
 class Consumer(TopicOperator):
@@ -33,8 +37,8 @@ class Consumer(TopicOperator):
         batch_size: int = 10,
         heartbeat_interval: float = 3.0,
         heartbeat_ttl: float = 12.0,
-        serializer: Optional[Serializer] = None,
-        deserializer: Optional[Deserializer] = None,
+        serializer: Optional["Serializer"] = None,
+        deserializer: Optional["Deserializer"] = None,
         debug: bool = False,
         logger: Optional[logging.Logger] = None,
     ):
@@ -63,6 +67,7 @@ class Consumer(TopicOperator):
         self._lock = asyncio.Lock()
         self._consumer_count = -1
         self._partition_count = -1
+        self._chunk_size = 10
         self._is_ready = False
         self._is_start = False
         self.last_read_partition_index = -1
@@ -171,7 +176,7 @@ class Consumer(TopicOperator):
         await self.redis.publish(
             self._topic_keys.consumer_group_keys.rebalance_channel, "rebalance"
         )
-        self.logger.info(f"Fire rebalance signal")
+        self.logger.debug(f"Fire rebalance signal")
 
     async def remove_ready(self) -> None:
         """Set consumer as not ready before rebalance."""
@@ -182,7 +187,7 @@ class Consumer(TopicOperator):
 
         self._is_ready = False
         await self._do_heartbeat()
-        self.logger.info(f"Marked as unready")
+        self.logger.debug(f"Marked as unready")
 
     async def all_consumers_ready(self) -> bool:
         """Check if all consumers are ready."""
@@ -244,45 +249,38 @@ class Consumer(TopicOperator):
             self._wait_for_rebalance(),
         ]
         await asyncio.gather(*tasks)
-        self.logger.info(f"Stopped!")
+        self.logger.debug(f"Stopped!")
         self._rebalance_event.set()
         self._stopped_event.set()
 
-    async def _consume(self) -> None:
+    async def _consume(self, is_batch: bool) -> None:
         try:
-            pending_messages = await self.get_pending_messages(count=1)
-            if len(pending_messages) > 0:
-                for msg_id, pending_message in pending_messages:
-                    try:
-                        await self.callback(pending_message)  # type: ignore[misc,arg-type]
-                    except Exception as e:
-                        self.logger.error(
-                            f"Error processing pending message {msg_id}", exc_info=e
-                        )
-                    finally:
-                        if pending_message.stream:
-                            await self.redis.xack(  # type: ignore[union-attr]
-                                pending_message.stream,
-                                self.group_name,
-                                msg_id,
-                            )
-            else:
-                messages = await self._read_messages_from_streams(count=1)
-                if not messages:
-                    await asyncio.sleep(0.1)
-                    return
+            result = await self._read_messages_from_streams(count=self.batch_size)
+            if not result:
+                await asyncio.sleep(0.1)
+                return
 
-                stream, [(msg_id, msg)] = messages[0]
-                msg["payload"] = self.deserializer(msg["payload"])
-                message = Message.from_dict(msg)
+            all_messages = []
+            for stream, messages in result:
+                for msg_id, msg in messages:
+                    message = self._deserialize(msg)  # type: ignore[arg-type]
+                    message.stream = stream
+                    all_messages.append(message)
+
+            if all_messages:
                 try:
-                    await self.callback(message)  # type: ignore[misc,arg-type]
+                    if is_batch:
+                        await cast(BatchCallback, self.callback)(all_messages)
+                    else:
+                        await cast(SingleCallback, self.callback)(all_messages[0])
                 except Exception as e:
-                    self.logger.error(f"Error processing message: {msg}", exc_info=e)
+                    self.logger.error(f"Error processing batch messages", exc_info=e)
                 finally:
-                    await self.redis.xack(stream, self.group_name, msg_id)  # type: ignore[union-attr]
+                    for stream, messages in result:
+                        for msg_id, msg in messages:
+                            await self.redis.xack(stream, self.group_name, msg_id)  # type: ignore[union-attr]
         except Exception as e:
-            self.logger.error(f"Error consuming message: {e}", exc_info=e)
+            self.logger.error(f"Error consuming job: {e}", exc_info=e)
         finally:
             pass
 
@@ -305,56 +303,9 @@ class Consumer(TopicOperator):
             self._wait_for_rebalance(),
         ]
         await asyncio.gather(*tasks)
-        self.logger.info(f"Stopped!")
+        self.logger.debug(f"Stopped!")
         self._rebalance_event.set()
         self._stopped_event.set()
-
-    async def _consume_batch(self) -> None:
-        try:
-            pending_messages = await self.get_pending_messages(count=self.batch_size)
-            if len(pending_messages) > 0:
-                try:
-                    _messages = []
-                    for msg_id, pending_message in pending_messages:
-                        _messages.append(pending_message)
-
-                    await self.callback(_messages)  # type: ignore[misc,arg-type]
-                except Exception as e:
-                    self.logger.error(f"Error processing batch messages", exc_info=e)
-                finally:
-                    for msg_id, pending_message in pending_messages:
-                        if pending_message.stream:
-                            await self.redis.xack(  # type: ignore[union-attr]
-                                pending_message.stream,
-                                self.group_name,
-                                msg_id,
-                            )
-            else:
-                result = await self._read_messages_from_streams(count=self.batch_size)
-                if not result:
-                    await asyncio.sleep(0.1)
-                    return
-
-                all_messages = []
-                for stream, messages in result:
-                    for msg_id, msg in messages:
-                        msg["payload"] = self.deserializer(msg["payload"])
-                        message = Message.from_dict(msg)
-                        message.stream = stream
-                        all_messages.append(message)
-
-                try:
-                    await self.callback(all_messages)  # type: ignore[misc,arg-type]
-                except Exception as e:
-                    self.logger.error(f"Error processing batch messages", exc_info=e)
-                finally:
-                    for stream, messages in result:
-                        for msg_id, msg in messages:
-                            await self.redis.xack(stream, self.group_name, msg_id)  # type: ignore[union-attr]
-        except Exception as e:
-            self.logger.error(f"Error consuming job: {e}", exc_info=e)
-        finally:
-            pass
 
     async def _create_consumer_group_for_partition(self, partition: int):
         try:
@@ -448,7 +399,7 @@ class Consumer(TopicOperator):
         async with self._lock:
             await self.update_partitions()
             await self.wait_for_all_ready()
-            self.logger.info(f"Starting consumption")
+            self.logger.info(f"Restarting consumption...")
             await asyncio.sleep(0.5)
             self._is_consuming = True
 
@@ -472,11 +423,61 @@ class Consumer(TopicOperator):
         await self.register_consumer()
         self.logger.info(f"Registered in group {self.group_name}")
 
-        self.logger.info(f"Preparing for consuming...")
+        self.logger.debug(f"Preparing for consuming...")
         await self.signal_rebalance()
 
-    async def get_pending_messages(self, count: int) -> List[Tuple[str, Message]]:
-        return []
+    async def _read_pending_messages(
+        self, stream: str, count: int
+    ) -> List[Tuple[str, List[Tuple[str, Dict[str, Any]]]]]:
+        pending_messages: List[Tuple[str, Dict[str, Any]]] = []
+
+        while len(pending_messages) < count:
+            pending = await self.redis.xpending_range(  # type: ignore[union-attr]
+                name=stream,
+                groupname=self.group_name,
+                min="-",
+                max="+",
+                count=self._chunk_size,
+                consumername=None,
+            )
+
+            if not pending:
+                break
+
+            message_ids = []
+            time_ide = {}
+            for p in pending:
+                message_ids.append(p["message_id"])
+                time_ide[p["message_id"]] = p.get("time_since_delivered", 0)
+
+            messages = await self.redis.xclaim(  # type: ignore[union-attr]
+                name=stream,
+                groupname=self.group_name,
+                consumername=self.consumer_name,
+                min_idle_time=0,
+                message_ids=message_ids,
+            )
+
+            for msg_id, fields in messages:
+                try:
+                    timeout = int(fields.get("timeout", "0"))
+                except (TypeError, ValueError):
+                    continue
+
+                if timeout:
+                    time_since_delivered = time_ide.get(msg_id, 0) / 1000
+                    if time_since_delivered > timeout:
+                        continue
+
+                pending_messages.append((msg_id, fields))
+
+                if len(pending_messages) >= count:
+                    break
+
+            if len(message_ids) < self._chunk_size:
+                break
+
+        return [(stream, pending_messages)]
 
     async def _do_consume(self, is_batch: bool) -> None:
         """Consume jobs from assigned partitions."""
@@ -492,7 +493,7 @@ class Consumer(TopicOperator):
                 continue
             else:
                 if not last_is_consuming:
-                    self.logger.info("Change from paused to resumed. Starting...")
+                    self.logger.debug("Change from paused to resumed. Starting...")
                     await asyncio.sleep(2)
                     if not self._is_consuming:
                         last_is_consuming = self._is_consuming
@@ -500,25 +501,23 @@ class Consumer(TopicOperator):
 
                 last_is_consuming = self._is_consuming
 
-            if is_batch:
-                await self._consume_batch()
-            else:
-                await self._consume()
+            await self._consume(is_batch=is_batch)
 
-        self.logger.info("Stopped consuming!")
+        self.logger.debug("Stopped consuming!")
 
     async def _read_messages_from_streams(
         self, count: int
     ) -> List[Tuple[str, List[Tuple[str, Dict[str, Any]]]]]:
-        self.last_read_partition_index = (self.last_read_partition_index + 1) % len(
-            self.partitions
-        )
-        self.logger.debug(
-            f"Read message from stream {self._topic_keys.partition_keys[self.last_read_partition_index].stream_key}"
-        )
-        stream = self._topic_keys.partition_keys[
-            self.last_read_partition_index
-        ].stream_key
+        next_partition = (self.last_read_partition_index + 1) % len(self.partitions)
+        stream = self._topic_keys.partition_keys[next_partition].stream_key
+        self.logger.debug(f"Read messages from stream {stream}")
+        self.last_read_partition_index = next_partition
+
+        pending_messages = await self._read_pending_messages(stream=stream, count=count)
+        if len(pending_messages[0][1]) > 0:
+            self.logger.debug(f"Found pending {len(pending_messages[0][1])} messages!")
+            return pending_messages
+
         return await self.redis.xreadgroup(  # type: ignore[union-attr,no-any-return]
             groupname=self.group_name,
             consumername=self.consumer_name,
@@ -526,3 +525,7 @@ class Consumer(TopicOperator):
             count=count,
             block=1000,
         )
+
+    def _deserialize(self, msg: Dict["FieldT", "EncodableT"]) -> Message:
+        msg["payload"] = self.deserializer(msg["payload"])  # type: ignore[arg-type]
+        return Message.from_dict(msg)  # type: ignore[arg-type]

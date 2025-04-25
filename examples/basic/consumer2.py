@@ -26,6 +26,7 @@ async def main():
         consumer_name="consumer_2",
         redis_url="redis://localhost:6379/0",
         batch_size=5,
+        debug=True,
     )
     try:
         await consumer.consume_batch(callback=process_job)
