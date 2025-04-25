@@ -1,7 +1,7 @@
 from logging import Logger
 from typing import Optional
 
-from aioredis import Redis
+from redis import asyncio as aioredis
 
 from redisaq.keys import TopicKeys
 
@@ -9,7 +9,7 @@ from redisaq.keys import TopicKeys
 class TopicOperator:
     logger: Logger
     _topic_keys: TopicKeys
-    redis: Optional[Redis] = None
+    redis: Optional[aioredis.Redis] = None
 
     async def get_num_partitions(self) -> int:
         """Get the number of partitions for the topic."""

@@ -101,7 +101,7 @@ async def main():
     
     # Connect and start processing
     await consumer.connect()
-    await consumer.process(process_message)
+    await consumer.consume(process_message)
 
     # Cleanup
     await producer.close()
@@ -115,24 +115,19 @@ if __name__ == "__main__":
 
 #### Partition Key Routing
 ```python
-from redisaq import Producer, Message
+from redisaq import Producer
 
 async def send_notifications():
     producer = Producer(topic="notifications", init_partitions=3)
     await producer.connect()
 
-    # Messages with same user_id will go to same partition
-    message = Message(
-        topic="notifications",
-        payload={"user_id": "123", "content": "Hello"},
-        partition_key="user_id"
-    )
-    await producer.enqueue(message)
+    await producer.enqueue({"user_id": "123", "content": "Hello"})
 ```
 
 #### Batch Processing
 ```python
-from redisaq import Consumer, BatchCallback
+import asyncio
+from redisaq import Consumer, Message
 from typing import List
 
 async def process_batch(messages: List[Message]):
@@ -147,7 +142,7 @@ consumer = Consumer(
     heartbeat_interval=3.0
 )
 
-await consumer.process_batch(process_batch)
+asyncio.run(consumer.consume_batch(process_batch))
 ```
 
 #### Custom Serialization

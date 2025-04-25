@@ -10,8 +10,8 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
-import aioredis
 import orjson
+from redis import asyncio as aioredis
 
 from redisaq.common import TopicOperator
 from redisaq.constants import APPLICATION_PREFIX
@@ -226,7 +226,7 @@ class Producer(TopicOperator):
                 "Redis not connected. Please run connect() function first"
             )
 
-        added = await self.redis.sadd(APPLICATION_METADATA_TOPICS, self.topic)
+        added = await self.redis.sadd(APPLICATION_METADATA_TOPICS, self.topic)  # type: ignore[misc]
         if added:
             self.logger.info(f"New topic {self.topic} is created!")
 

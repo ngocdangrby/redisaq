@@ -11,9 +11,7 @@ from redisaq.utils import APPLICATION_METADATA_TOPICS
 
 
 @pytest.fixture
-def producer(redis_client, monkeypatch):
-    # Patch aioredis.from_url to return fake_redis
-    monkeypatch.setattr("aioredis.from_url", AsyncMock(return_value=redis_client))
+def producer(redis_client, mock_aioredis_from_url):
     return Producer(
         topic="test_topic", redis_url="redis://localhost:6379/1", init_partitions=2
     )

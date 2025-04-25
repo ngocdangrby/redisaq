@@ -1,6 +1,6 @@
 [project]
 name = "redisaq"
-version = "0.1.2"
+version = "0.1.3"
 description = "A Python library for distributed job queuing and processing using Redis Streams"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -34,7 +34,7 @@ packages = ["redisaq"]
 
 [tool.poetry]
 name = "redisaq"
-version = "0.1.2"
+version = "0.1.3"
 description = "A lightweight, async Redis-based queue for small applications, alternative to Kafka."
 authors = ["Do Quoc Vuong <vuongtlt13@gmail.com>"]
 license = "MIT"
@@ -45,9 +45,9 @@ documentation = "https://redisaq.readthedocs.io"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
-aioredis = "^2.0.0"
 prometheus-client = "^0.20.0"
 orjson = "^3.10.15"
+redis = "^5.2.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"

@@ -16,5 +16,5 @@ async def redis_client() -> AsyncIterator[redis.Redis]:
 @pytest_asyncio.fixture
 async def mock_aioredis_from_url(redis_client):
     """Fixture to mock aioredis.from_url for tests that call connect."""
-    with patch("aioredis.from_url", return_value=redis_client) as mock_from_url:
+    with patch("redis.asyncio.from_url", return_value=redis_client) as mock_from_url:
         yield mock_from_url

@@ -1,4 +1,4 @@
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from .consumer import Consumer
 from .models import BatchCallback, Message, SingleCallback

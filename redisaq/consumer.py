@@ -10,9 +10,9 @@ import uuid
 from asyncio import Task
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
 
-import aioredis
 import orjson
 from redis import ResponseError
+from redis import asyncio as aioredis
 
 from redisaq.common import TopicOperator
 from redisaq.constants import APPLICATION_PREFIX
@@ -327,7 +327,7 @@ class Consumer(TopicOperator):
         ):
             self._topic_keys.set_consumer_group(self.group_name)
 
-        await self.redis.sadd(self._topic_keys.consumer_group_key, self.group_name)  # type: ignore[union-attr]
+        await self.redis.sadd(self._topic_keys.consumer_group_key, self.group_name)  # type: ignore[misc,union-attr]
 
     async def _do_heartbeat(self):
         if self.redis is None:
