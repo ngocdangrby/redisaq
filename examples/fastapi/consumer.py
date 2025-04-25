@@ -109,7 +109,7 @@ async def main() -> None:
         await consumer.connect()
 
         # Use batch processing for better throughput
-        await consumer.process_batch(process_batch)
+        await consumer.consume_batch(process_batch)
 
     except KeyboardInterrupt:
         logger.info("Shutting down consumer...")

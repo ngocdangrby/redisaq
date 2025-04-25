@@ -52,6 +52,7 @@ Usage:
 import logging
 from typing import Dict, List
 
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
 
@@ -92,7 +93,7 @@ async def shutdown_event():
 class EmailJob(BaseModel):
     """Email job payload validation model"""
 
-    to: EmailStr
+    to: str
     subject: str
     body: str
     priority: int = 1  # Optional priority field
@@ -176,3 +177,7 @@ async def get_status():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return {"status": "unhealthy", "redis_connected": False, "error": str(e)}
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, port=8080)

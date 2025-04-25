@@ -100,10 +100,8 @@ class Consumer(TopicOperator):
                 self._topic_keys.consumer_group_keys.rebalance_channel
             )
             await self.pubsub.close()
-            self.pubsub = None
         if self.redis:
             await self.redis.close()
-            self.redis = None
 
     async def register_consumer(self) -> None:
         """Register consumer in the group."""

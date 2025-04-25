@@ -1,6 +1,6 @@
 [project]
 name = "redisaq"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Python library for distributed job queuing and processing using Redis Streams"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -34,7 +34,7 @@ packages = ["redisaq"]
 
 [tool.poetry]
 name = "redisaq"
-version = "0.1.0"
+version = "0.1.2"
 description = "A lightweight, async Redis-based queue for small applications, alternative to Kafka."
 authors = ["Do Quoc Vuong <vuongtlt13@gmail.com>"]
 license = "MIT"
@@ -64,6 +64,8 @@ pytest-cov = "^4.1.0"
 pre-commit = "3.5.0"
 black = "23.9.1"
 isort = "5.13.2"
+pydantic = {version = "2.9", extras = ["email"]}
+email-validator = "^2.2.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

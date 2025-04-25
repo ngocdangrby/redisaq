@@ -174,35 +174,9 @@ consumer = Consumer(
 )
 ```
 
-```python
-from redisaq import Producer, Consumer
-import asyncio
+### FastAPI Example
 
-
-async def main():
-  # Producer
-  producer = Producer(topic="my_topic", maxlen=1000)
-  await producer.batch_enqueue([
-    {"data": "job1"},
-    {"data": "job2"}
-  ])
-
-  # Consumer
-  async def process_job(job):
-    print(f"Processing message {job.id}: {job.payload}")
-    await asyncio.sleep(1)
-
-  consumer = Consumer(
-    topic="my_topic",
-    group="my_group",
-    consumer_id="consumer_1",
-    process_job=process_job
-  )
-  await consumer.consume()
-
-
-asyncio.run(main())
-```
+See [`examples/fastapi`](examples/fastapi) for a full-featured FastAPI integration.
 
 ## Examples
 - **Basic Example**: Demonstrates batch job production, consumption, rebalancing, and reconsumption. See [examples/basic/README.md](examples/basic/README.md).
